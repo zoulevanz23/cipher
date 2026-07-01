@@ -1,0 +1,19 @@
+[project]
+name = "vulnchecker"
+version = "0.1.0"
+description = "Vulnerability dependency checker for npm packages using the OSV API"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+]
+
+[project.scripts]
+vulnchecker = "backend.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
