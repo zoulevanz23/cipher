@@ -1,0 +1,65 @@
+name: VulnChecker Reusable
+
+on:
+  workflow_call:
+    inputs:
+      scan-path:
+        description: "Path to the project directory"
+        required: false
+        type: string
+        default: "."
+      fail-on:
+        description: "Fail CI if vulnerabilities at this severity or higher are found (none, any, critical, high, medium)"
+        required: false
+        type: string
+        default: "high"
+      ecosystem:
+        description: "Ecosystem to scan (npm, pypi, go, maven, nuget, rubygems, cargo). Auto-detected if omitted."
+        required: false
+        type: string
+        default: ""
+      python-version:
+        description: "Python version to use"
+        required: false
+        type: string
+        default: "3.11"
+      output-format:
+        description: "Output format (sarif, json, table, html)"
+        required: false
+        type: string
+        default: "sarif"
+      upload-sarif:
+        description: "Upload SARIF results to GitHub code scanning"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install vulnchecker
+        run: pip install vulnchecker
+
+      - name: Scan dependencies
+        run: >
+          vulnchecker scan
+          --path "${{ inputs.scan-path }}"
+          --fail-on ${{ inputs.fail-on }}
+          --format ${{ inputs.output-format }}
+          --output results.${{ inputs.output-format == 'sarif' && 'sarif' || inputs.output-format == 'json' && 'json' || 'txt' }}
+          ${{ inputs.ecosystem != '' && format('--ecosystem {0}', inputs.ecosystem) || '' }}
+
+      - name: Upload SARIF
+        if: inputs.output-format == 'sarif' && inputs.upload-sarif
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: vulnchecker

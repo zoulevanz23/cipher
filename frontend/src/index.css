@@ -13,16 +13,44 @@
   --color-medium: #ffa502;
   --color-low: #2ed573;
   --color-info: #3742fa;
+  --color-body: #0b0d15;
+  --color-body-text: #ffffff;
+}
+
+.light {
+  --color-surface: #f8f8fa;
+  --color-surface-2: #eeeeF2;
+  --color-border: #d4d4da;
+  --color-accent: #00994d;
+  --color-accent-glow: #00994d;
+  --color-critical: #cc2233;
+  --color-high: #cc4400;
+  --color-medium: #b07a00;
+  --color-low: #1a8a4a;
+  --color-info: #1a3acc;
+  --color-body: #f0f0f5;
+  --color-body-text: #1a1a22;
+  --color-gray-50: #111827;
+  --color-gray-100: #1f2937;
+  --color-gray-200: #374151;
+  --color-gray-300: #4b5563;
+  --color-gray-400: #6b7280;
+  --color-gray-500: #889096;
+  --color-gray-600: #9ca3af;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2a2a2e transparent;
+  scrollbar-color: var(--color-border) transparent;
 }
 
 body {
   min-height: 100vh;
-  background: radial-gradient(ellipse at 0% 0%, #18181d 0%, #0a0a0c 60%);
+  background: radial-gradient(ellipse at 0% 0%, var(--color-surface-2) 0%, var(--color-body) 60%);
+}
+
+.light body {
+  background: radial-gradient(ellipse at 0% 0%, var(--color-surface-2) 0%, var(--color-body) 60%);
 }
 
 .glass {
@@ -31,8 +59,13 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.light .glass {
+  background: rgba(248, 248, 250, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 .scan-gradient {
-  background: linear-gradient(135deg, #00ff41, #00cc88, #00ff41);
+  background: linear-gradient(135deg, var(--color-accent), #00cc88, var(--color-accent));
   background-size: 200% 200%;
   animation: gradient-shift 4s ease infinite;
 }
@@ -43,8 +76,8 @@ body {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 65, 0.15); }
-  50% { box-shadow: 0 0 40px rgba(0, 255, 65, 0.3); }
+  0%, 100% { box-shadow: 0 0 20px color-mix(in srgb, var(--color-accent) 15%, transparent); }
+  50% { box-shadow: 0 0 40px color-mix(in srgb, var(--color-accent) 30%, transparent); }
 }
 
 .animate-pulse-glow {
@@ -103,24 +136,6 @@ body {
   98% { transform: translate(2px, -1px); clip-path: inset(20% 0 60% 0); }
 }
 
-@keyframes scanline {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100vh); }
-}
-
-.scanline-overlay::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: rgba(0, 255, 65, 0.06);
-  pointer-events: none;
-  z-index: 9999;
-  animation: scanline 6s linear infinite;
-}
-
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
@@ -167,7 +182,7 @@ body {
   left: 0;
   width: 100%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #00ff41, transparent);
+  background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
   background-size: 200% 100%;
   animation: border-scan 3s linear infinite;
   border-radius: 0 0 1rem 1rem;
@@ -175,7 +190,7 @@ body {
 
 .hex-grid {
   background-image:
-    linear-gradient(rgba(0, 255, 65, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 65, 0.03) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--color-accent) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 4%, transparent) 1px, transparent 1px);
   background-size: 40px 40px;
 }

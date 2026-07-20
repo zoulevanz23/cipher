@@ -78,7 +78,7 @@ function Card({
         <span className="text-xs text-gray-500 font-medium">{label}</span>
         {icon}
       </div>
-      <p className={`text-2xl font-bold font-mono ${accent ? "text-critical" : "text-white"}`}>
+      <p className={`text-2xl font-bold font-mono ${accent ? "text-critical" : "text-body-text"}`}>
         {value}
       </p>
     </div>

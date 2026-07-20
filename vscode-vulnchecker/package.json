@@ -1,0 +1,71 @@
+{
+  "name": "vulnchecker",
+  "displayName": "VulnChecker",
+  "description": "Inline dependency vulnerability scanning for package.json, requirements.txt, go.mod, Cargo.toml and more",
+  "version": "0.1.0",
+  "publisher": "cipher",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters", "Security"],
+  "keywords": ["security", "vulnerability", "dependencies", "npm", "pip", "cargo", "license"],
+  "icon": "icon.png",
+  "activationEvents": [
+    "onLanguage:json",
+    "onLanguage:python",
+    "onLanguage:go",
+    "onLanguage:toml",
+    "onLanguage:ruby",
+    "onLanguage:xml",
+    "onLanguage:yaml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "VulnChecker",
+      "properties": {
+        "vulnchecker.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "VulnChecker API server URL"
+        },
+        "vulnchecker.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable VulnChecker scanning"
+        },
+        "vulnchecker.minSeverity": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "default": "low",
+          "description": "Minimum vulnerability severity to report"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "vulnchecker.scanFile",
+        "title": "VulnChecker: Scan current file for vulnerabilities"
+      },
+      {
+        "command": "vulnchecker.openResults",
+        "title": "VulnChecker: Open detailed results panel"
+      },
+      {
+        "command": "vulnchecker.clearDiagnostics",
+        "title": "VulnChecker: Clear diagnostics"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}

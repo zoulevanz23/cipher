@@ -23,7 +23,7 @@ export function About({ onClose }: AboutProps) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-surface-2 border border-border flex items-center justify-center text-gray-400 hover:text-white transition-colors flex-shrink-0"
+            className="w-8 h-8 rounded-lg bg-surface-2 border border-border flex items-center justify-center text-gray-400 hover:text-body-text transition-colors shrink-0"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -47,6 +47,8 @@ export function About({ onClose }: AboutProps) {
               <p className="text-xs text-gray-400 leading-relaxed">
                 Built to help developers secure their supply chain by catching
                 vulnerable dependencies before they ship to production.
+                Also available as a <span className="text-accent font-mono">pip install cipher</span> CLI
+                &mdash; no server or browser needed.
               </p>
             </div>
           </div>
