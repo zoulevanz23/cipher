@@ -11,6 +11,14 @@
   "categories": ["Linters", "Security"],
   "keywords": ["security", "vulnerability", "dependencies", "npm", "pip", "cargo", "license"],
   "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#0f0f12",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bamwinbam-cloud/vulnchecker"
+  },
   "activationEvents": [
     "onLanguage:json",
     "onLanguage:python",
@@ -40,13 +48,51 @@
           "enum": ["low", "medium", "high", "critical"],
           "default": "low",
           "description": "Minimum vulnerability severity to report"
+        },
+        "vulnchecker.autoLogin": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically log in with stored credentials on startup"
+        },
+        "vulnchecker.scanOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically scan package.json on save"
         }
       }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vulnchecker",
+          "title": "VulnChecker",
+          "icon": "$(shield)"
+        }
+      ]
+    },
+    "views": {
+      "vulnchecker": [
+        {
+          "id": "vulnchecker.vulns",
+          "name": "Vulnerabilities",
+          "when": "vulnchecker:hasVulns"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "vulnchecker.scanFile",
+          "when": "view == vulnchecker.vulns",
+          "group": "navigation"
+        }
+      ]
     },
     "commands": [
       {
         "command": "vulnchecker.scanFile",
-        "title": "VulnChecker: Scan current file for vulnerabilities"
+        "title": "VulnChecker: Scan current file for vulnerabilities",
+        "icon": "$(refresh)"
       },
       {
         "command": "vulnchecker.openResults",
@@ -55,6 +101,30 @@
       {
         "command": "vulnchecker.clearDiagnostics",
         "title": "VulnChecker: Clear diagnostics"
+      },
+      {
+        "command": "vulnchecker.login",
+        "title": "VulnChecker: Sign In"
+      },
+      {
+        "command": "vulnchecker.register",
+        "title": "VulnChecker: Create Account"
+      },
+      {
+        "command": "vulnchecker.logout",
+        "title": "VulnChecker: Sign Out"
+      },
+      {
+        "command": "vulnchecker.showAccount",
+        "title": "VulnChecker: Show Account Status"
+      },
+      {
+        "command": "vulnchecker.openAccountView",
+        "title": "VulnChecker: Open Account"
+      },
+      {
+        "command": "vulnchecker.applyFix",
+        "title": "VulnChecker: Apply Fix"
       }
     ]
   },
