@@ -1,32 +1,19 @@
-interface Props {
-  breakdown: { critical: number; high: number; medium: number; low: number };
-}
+const COLORS: Record<string,string> = { critical: "#C1273B", high: "#A85419", medium: "#8A6A14", low: "#2C6E52" };
+const LABELS: Record<string,string> = { critical: "CRITICAL", high: "HIGH", medium: "MEDIUM", low: "LOW" };
 
-const COLORS = { critical: "#ff4757", high: "#ff6348", medium: "#ffa502", low: "#2ed573" };
-const LABELS = { critical: "CRITICAL", high: "HIGH", medium: "MEDIUM", low: "LOW" };
-
-export function SeverityChart({ breakdown }: Props) {
+export function SeverityChart({ breakdown }: { breakdown: { critical:number; high:number; medium:number; low:number } }) {
   const max = Math.max(breakdown.critical, breakdown.high, breakdown.medium, breakdown.low, 1);
-
   return (
-    <div className="bg-surface-2/50 border border-border rounded-xl p-5">
-      <h4 className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-4">Severity Breakdown</h4>
-      <div className="space-y-3">
+    <div className="border border-[#12181F] p-4 bg-[#E3E9ED]">
+      <h4 className="text-[10px] font-mono tracking-[0.04em] text-[#8593A1] font-semibold mb-3">SEVERITY BREAKDOWN</h4>
+      <div className="space-y-2.5">
         {(Object.keys(COLORS) as Array<keyof typeof COLORS>).map((key) => (
           <div key={key} className="flex items-center gap-3">
-            <span className="w-16 text-xs font-mono text-gray-400 text-right">{LABELS[key]}</span>
-            <div className="flex-1 h-5 bg-surface-2 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${(breakdown[key] / max) * 100}%`,
-                  backgroundColor: COLORS[key],
-                }}
-              />
+            <span className="w-16 text-[11px] font-mono text-[#4C5A67] text-right">{LABELS[key]}</span>
+            <div className="flex-1 h-3 bg-white border border-[#B7C3CB] overflow-hidden">
+              <div className="h-full transition-all" style={{ width: `${(breakdown[key as keyof typeof breakdown]/max)*100}%`, backgroundColor: COLORS[key] }} />
             </div>
-            <span className="w-6 text-xs font-mono font-bold text-right" style={{ color: COLORS[key] }}>
-              {breakdown[key]}
-            </span>
+            <span className="w-5 text-xs font-mono font-bold text-right" style={{ color: COLORS[key] }}>{breakdown[key as keyof typeof breakdown]}</span>
           </div>
         ))}
       </div>
