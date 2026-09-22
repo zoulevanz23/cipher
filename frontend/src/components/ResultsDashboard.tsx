@@ -2,193 +2,42 @@ import { useState } from "react";
 import type { ScanResult, Severity } from "../types";
 import { DependencyTree } from "./DependencyTree";
 
-interface Props {
-  results: ScanResult[];
-  onSelectResult?: (result: ScanResult | null) => void;
-}
+const order: Record<string, number> = { CRITICAL:4, HIGH:3, MEDIUM:2, LOW:1, NONE:0, UNKNOWN:-1 };
+const swatch: Record<string,string> = { CRITICAL:"bg-[#C1273B]", HIGH:"bg-[#A85419]", MEDIUM:"bg-[#8A6A14]", LOW:"bg-[#2C6E52]" };
 
-const severityOrder: Record<string, number> = {
-  CRITICAL: 4,
-  HIGH: 3,
-  MEDIUM: 2,
-  LOW: 1,
-  NONE: 0,
-  UNKNOWN: -1,
-};
-
-const severityBadge: Record<string, { label: string; classes: string }> = {
-  CRITICAL: {
-    label: "CRITICAL",
-    classes: "bg-critical/15 text-critical border-critical/25",
-  },
-  HIGH: {
-    label: "HIGH",
-    classes: "bg-high/15 text-high border-high/25",
-  },
-  MEDIUM: {
-    label: "MEDIUM",
-    classes: "bg-medium/15 text-medium border-medium/25",
-  },
-  LOW: {
-    label: "LOW",
-    classes: "bg-low/15 text-low border-low/25",
-  },
-  NONE: {
-    label: "SAFE",
-    classes: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  },
-  UNKNOWN: {
-    label: "UNKNOWN",
-    classes: "bg-gray-500/10 text-gray-400 border-gray-500/20",
-  },
-};
-
-export function ResultsDashboard({ results, onSelectResult }: Props) {
-  const [severityFilter, setSeverityFilter] = useState<Severity | "ALL">("ALL");
-  const [sortBy, setSortBy] = useState<"severity" | "name">("severity");
-
-  const sorted = [...results].sort((a, b) => {
-    if (sortBy === "severity") {
-      return (severityOrder[b.max_severity] ?? 0) - (severityOrder[a.max_severity] ?? 0);
-    }
-    return a.package.name.localeCompare(b.package.name);
-  });
-
-  const filtered =
-    severityFilter === "ALL"
-      ? sorted
-      : sorted.filter((r) => r.max_severity === severityFilter);
-
-  const vulnerableResults = results.filter((r) => r.vulnerable);
-
+export function ResultsDashboard({ results, onSelectResult }: { results: ScanResult[]; onSelectResult?: (r: ScanResult|null)=>void }) {
+  const [filter, setFilter] = useState<Severity|"ALL">("ALL");
+  const [sortBy, setSortBy] = useState<"severity"|"name">("severity");
+  const sorted=[...results].sort((a,b)=> sortBy==="severity"?(order[b.max_severity]??0)-(order[a.max_severity]??0):a.package.name.localeCompare(b.package.name));
+  const filtered=filter==="ALL"?sorted:sorted.filter(r=>r.max_severity===filter);
+  const vuln=results.filter(r=>r.vulnerable);
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-xl font-bold">
-          <span className="text-gray-400 font-mono text-sm mr-1">$</span>
-          {vulnerableResults.length > 0
-            ? `${vulnerableResults.length} package${vulnerableResults.length > 1 ? "s" : ""} with vulnerabilities`
-            : "All packages are safe — [OK]"}
-        </h2>
-        <div className="flex items-center gap-3 text-sm">
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value as Severity | "ALL")}
-            className="bg-surface-2 border border-border rounded-lg px-3 py-1.5 text-gray-300 focus:outline-none focus:ring-1 focus:ring-accent/50"
-          >
-            <option value="ALL">All severities</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-3 border-t border-[#12181F] pt-6 mb-3">
+        <h2 className="font-[Space_Grotesk] font-bold text-[18px]"><span className="font-mono text-xs text-[#8593A1] mr-2">SHEET —</span>{vuln.length?`${vuln.length} package${vuln.length>1?"s":""} with vulnerabilities`:"All packages safe — [OK]"}</h2>
+        <div className="flex items-center gap-2">
+          <select value={filter} onChange={e=>setFilter(e.target.value as any)} className="border border-[#12181F] bg-white px-2 py-1 text-xs font-mono">
+            <option value="ALL">All severities</option><option value="CRITICAL">Critical</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option>
           </select>
-          <button
-            onClick={() => setSortBy(sortBy === "severity" ? "name" : "severity")}
-            className="bg-surface-2 border border-border rounded-lg px-3 py-1.5 text-gray-300 hover:text-body-text transition-colors"
-          >
-            Sort by {sortBy === "severity" ? "name" : "severity"}
+          <button onClick={()=>setSortBy(sortBy==="severity"?"name":"severity")} className="border border-[#12181F] px-3 py-1 text-xs font-mono bg-[#EDF1F4]">Sort by {sortBy==="severity"?"name":"severity"}</button>
+        </div>
+      </div>
+      <div className="border border-[#12181F]">
+        <div className="hidden sm:flex text-[10px] font-mono tracking-[0.04em] text-[#8593A1] bg-[#E3E9ED] border-b border-[#12181F] px-3 py-2">
+          <span className="flex-1">PACKAGE</span><span className="w-20 text-center">SEVERITY</span><span className="w-24 text-right">VULNS</span>
+        </div>
+        {filtered.map((r,i)=>(
+          <button key={`${r.package.name}-${i}`} onClick={()=>onSelectResult?.(r)} className="w-full flex items-center gap-3 px-3 py-3 border-b last:border-b-0 border-[#B7C3CB] hover:bg-[#E3E9ED] text-left">
+            <span className={`w-2 h-2 shrink-0 ${swatch[r.max_severity]??"bg-[#B7C3CB]"}`}/>
+            <span className="flex-1 min-w-0 font-mono text-xs font-semibold truncate">{r.package.name}<span className="text-[#8593A1] font-normal ml-2">{r.package.version}</span></span>
+            <span className="hidden sm:inline-flex text-[10px] font-mono border border-[#B7C3CB] px-1.5 py-0.5">{r.package.ecosystem ?? ""}</span>
+            <span className={`text-[10px] font-mono font-bold px-2 py-1 border ${r.max_severity==="CRITICAL"?"border-[#C1273B] text-[#C1273B]": r.max_severity==="HIGH"?"border-[#A85419] text-[#A85419]": r.max_severity==="MEDIUM"?"border-[#8A6A14] text-[#8A6A14]":"border-[#2C6E52] text-[#2C6E52]"}`}>{r.max_severity}</span>
+            <span className="w-12 text-right text-xs font-mono">{r.vulnerabilities.length}</span>
           </button>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {filtered.map((result, i) => (
-          <div
-            key={`${result.package.name}-${i}`}
-            className="animate-slide-up"
-            style={{ animationDelay: `${i * 0.03}s` }}
-          >
-            <PackageRow
-              result={result}
-              onClick={() => onSelectResult?.(result)}
-            />
-          </div>
         ))}
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            No results match the current filter.
-          </div>
-        )}
+        {filtered.length===0&&<div className="text-center py-10 text-xs font-mono text-[#8593A1]">No results match filter.</div>}
       </div>
-
-    </div>
-  );
-}
-
-const ecosystemColors: Record<string, string> = {
-  npm: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-  pypi: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  go: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-  maven: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-  nuget: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  rubygems: "bg-red-500/10 text-red-400 border-red-500/20",
-  cargo: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-};
-
-function PackageRow({
-  result,
-  onClick,
-}: {
-  result: ScanResult;
-  onClick: () => void;
-}) {
-  const badge = severityBadge[result.max_severity] ?? severityBadge.UNKNOWN;
-  const count = result.vulnerabilities.length;
-  const eco = result.package.ecosystem ?? "";
-  const ecoClasses = ecosystemColors[eco] ?? "bg-gray-500/10 text-gray-400 border-gray-500/20";
-  const lic = result.package.license;
-  const unmaintained = result.unmaintained;
-  const healthScore = result.health_score;
-
-  return (
-    <div className="rounded-xl bg-surface-2 border border-border hover:border-accent/30 transition-all group tech-border overflow-hidden">
-      <button onClick={onClick} className="w-full flex items-center justify-between p-4 text-left">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center shrink-0">
-            <span className="text-xs font-mono font-bold text-gray-500">
-              {result.package.name[0].toUpperCase()}
-            </span>
-          </div>
-          <div className="min-w-0">
-            <p className="font-medium text-sm truncate">{result.package.name}</p>
-            <p className="text-xs text-gray-500 font-mono">{result.package.version}</p>
-          </div>
-          {eco && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono hidden sm:inline-block ${ecoClasses}`}>
-              {eco}
-            </span>
-          )}
-          {lic && lic !== "Unknown" && lic !== "UNKNOWN" && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded border border-purple-500/20 bg-purple-500/10 text-purple-400 font-mono hidden sm:inline-block">
-              {lic}
-            </span>
-          )}
-          {unmaintained && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/20 bg-red-500/10 text-red-400 font-mono">
-              unmaintained
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {healthScore !== undefined && healthScore < 100 && (
-            <span className={`text-xs font-mono ${healthScore >= 80 ? "text-emerald-400" : healthScore >= 50 ? "text-amber-400" : "text-red-400"}`}>
-              {healthScore}/100
-            </span>
-          )}
-          <span className={`text-xs px-2 py-0.5 rounded-md border font-medium ${badge.classes}`}>
-            {badge.label}
-          </span>
-          {count > 0 && (
-            <span className="text-xs text-gray-400 font-mono">
-              {count} vuln{count > 1 ? "s" : ""}
-            </span>
-          )}
-          <svg className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
-      </button>
-      <DependencyTree dependencies={result.package.dependencies} packageName={result.package.name} />
+      {filtered.length>0 && <div className="mt-4 space-y-0">{filtered.map(r=> <div key={r.package.name} className="hidden"><DependencyTree dependencies={r.package.dependencies} packageName={r.package.name} /></div>)}</div>}
     </div>
   );
 }
