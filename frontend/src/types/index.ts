@@ -19,6 +19,8 @@ export interface Vulnerability {
   cvss_vector?: string;
   cwe_id?: string;
   source?: string;
+  epss_score?: number | null;
+  epss_percentile?: number | null;
 }
 
 export type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
@@ -41,6 +43,8 @@ export interface ScanResult {
   vulnerable: boolean;
   unmaintained?: boolean;
   health_score?: number;
+  status?: string;
+  scan_error?: string | null;
 }
 
 export interface ScanResponse {
@@ -58,6 +62,8 @@ export interface ScanResponse {
   results: ScanResult[];
   fixes: FixSuggestion[];
   sources_used?: string[];
+  scan_status?: string;
+  scan_errors?: { package: string; version: string; status: string; error?: string | null }[];
 }
 
 export interface ScanRequest {
@@ -66,6 +72,29 @@ export interface ScanRequest {
   lock_file_type?: string;
   min_severity?: string;
   ecosystem?: string;
+  include_dev?: boolean;
   ignore?: string[];
   ignore_until?: Record<string, string>;
+}
+
+export interface ScanUrlRequest {
+  url: string;
+  filename?: string;
+  min_severity?: string;
+  ecosystem?: string;
+  include_dev?: boolean;
+  ignore?: string[];
+  ignore_until?: Record<string, string>;
+}
+
+export interface ScanProgressEvent {
+  event: "started" | "progress" | "done" | "error";
+  total?: number;
+  index?: number;
+  package?: string;
+  version?: string;
+  status?: string;
+  vulnerabilities?: number;
+  scan?: ScanResponse;
+  detail?: string;
 }
