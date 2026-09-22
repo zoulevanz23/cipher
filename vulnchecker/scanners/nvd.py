@@ -4,6 +4,7 @@ from typing import Optional
 import httpx
 
 from ..normalize import NormalizedVuln, cvss_to_severity
+from ..cache import get_cache, set_cache
 
 NVD_API = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 MAX_RETRIES = 2
@@ -81,23 +82,25 @@ def _parse_nvd_cve(cve_item: dict) -> Optional[NormalizedVuln]:
 async def enrich_cves(
     cve_ids: list[str],
     api_key: str = "",
+    client: httpx.AsyncClient | None = None,
 ) -> list[NormalizedVuln]:
     if not cve_ids:
         return []
 
     sem = asyncio.Semaphore(MAX_CONCURRENT)
-    results: list[NormalizedVuln] = []
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        tasks = []
-        for cve_id in cve_ids:
-            tasks.append(_fetch_cve(client, sem, cve_id, api_key))
-        responses = await asyncio.gather(*tasks)
-        for r in responses:
+    async def _runs(c: httpx.AsyncClient) -> list[NormalizedVuln]:
+        results: list[NormalizedVuln] = []
+        tasks = [_fetch_cve(c, sem, cve_id, api_key) for cve_id in cve_ids]
+        for r in await asyncio.gather(*tasks):
             if r:
                 results.append(r)
+        return results
 
-    return results
+    if client is not None:
+        return await _runs(client)
+    async with httpx.AsyncClient(timeout=15) as c:
+        return await _runs(c)
 
 
 async def _fetch_cve(
@@ -106,6 +109,10 @@ async def _fetch_cve(
     cve_id: str,
     api_key: str = "",
 ) -> Optional[NormalizedVuln]:
+    cached = get_cache("nvd", cve_id)
+    if cached is not None:
+        return _parse_nvd_cve(cached) if isinstance(cached, dict) else None
+
     params: dict[str, str] = {"cveId": cve_id}
     headers = {}
     if api_key:
@@ -123,9 +130,11 @@ async def _fetch_cve(
             resp.raise_for_status()
             data = resp.json()
             vulns = data.get("vulnerabilities", [])
-            if vulns:
-                return _parse_nvd_cve(vulns[0])
-            return None
+            if not vulns:
+                return None
+            entry = vulns[0]
+            set_cache("nvd", cve_id, entry)
+            return _parse_nvd_cve(entry)
         except httpx.RequestError:
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(RETRY_DELAY * (attempt + 1))
