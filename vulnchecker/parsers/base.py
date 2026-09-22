@@ -19,8 +19,11 @@ def clean_version(raw: str) -> str:
     if v.startswith("^") or v.startswith("~"):
         v = v[1:]
     v = v.split("||")[0].strip()
-    v = re.sub(r"[^\d\.]", "", v.split("-")[0])
-    return v
+    v = re.sub(r"\s+-\s+|\s*,+\s*", " ", v)
+    parts = [p for p in v.split() if p]
+    v = parts[0] if parts else v
+    v = v.lstrip(">=<~^!=").strip()
+    return re.sub(r"[^\d\.]", "", v.split("-")[0])
 
 
 def parse_npm(content: str, file_type: str = "package.json") -> list[Package]:
@@ -49,7 +52,7 @@ def _parse_package_lock(content: str) -> list[Package]:
     for name, info in data.get("packages", {}).items():
         if name == "":
             continue
-        pkg_name = name.lstrip("node_modules/")
+        pkg_name = name.removeprefix("node_modules/") if isinstance(name, str) else name
         if pkg_name in seen:
             continue
         seen.add(pkg_name)
@@ -62,19 +65,19 @@ def _parse_package_lock(content: str) -> list[Package]:
 def _parse_yarn_lock(content: str) -> list[Package]:
     packages: list[Package] = []
     seen: set[str] = set()
-    pattern = re.compile(r'"?([^"]+?)"?:$')
-    version_pattern = re.compile(r'^\s+version "([^"]+)"')
+    pattern = re.compile(r'"?([^"\n]+?)"?:\s*$')
+    version_pattern = re.compile(r'^\s+version\s*[:=]?\s*"?([^"#\s]+)"?\s*$')
     lines = content.split("\n")
     i = 0
     while i < len(lines):
         line = lines[i]
         m = pattern.match(line)
         if m:
-            spec = m.group(1)
+            spec = m.group(1).strip()
             if spec.startswith("yarn") or spec == "__metadata":
                 i += 1
                 continue
-            pkg_name = spec.rsplit("@", 1)[0] if spec.count("@") > 1 else spec
+            pkg_name = spec.rsplit("@", 1)[0] if spec else spec
             pkg_name = pkg_name.lstrip('"').strip()
             if pkg_name in seen:
                 i += 1
