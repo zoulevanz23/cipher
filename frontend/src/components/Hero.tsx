@@ -1,96 +1,108 @@
-import { RadarScan } from "./RadarScan";
+import { useEffect, useRef } from "react";
 
 export function Hero() {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const drawnRef = useRef(false);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || drawnRef.current) return;
+    const paths = Array.from(svg.querySelectorAll<SVGPathElement>("[data-path]"));
+    const nodes = Array.from(svg.querySelectorAll<SVGGElement>("[data-node]"));
+    // initial state
+    paths.forEach(p => {
+      const len = p.getTotalLength();
+      p.style.strokeDasharray = String(len);
+      p.style.strokeDashoffset = String(len);
+      (p as any).style.transition = "none";
+    });
+    nodes.forEach(n => { (n as HTMLElement).style.opacity = "0"; (n as any).style.transition = "none"; });
+
+    const animate = (delayBase: number) => {
+      if (drawnRef.current) return;
+      drawnRef.current = true;
+      paths.forEach((p, i) => {
+        const len = p.getTotalLength();
+        requestAnimationFrame(() => setTimeout(() => {
+          p.style.transition = `stroke-dashoffset var(--dur-draw) var(--ease)`;
+          p.style.strokeDashoffset = "0";
+        }, delayBase + i * 90));
+      });
+      nodes.forEach((n, i) => {
+        requestAnimationFrame(() => setTimeout(() => {
+          (n as HTMLElement).style.transition = `opacity var(--dur-base) var(--ease)`;
+          (n as HTMLElement).style.opacity = "1";
+        }, delayBase + i * 110));
+      });
+    };
+
+    // fire once when scrolled into view, then never again this session
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !drawnRef.current) { animate(0); io.disconnect(); }
+        });
+      }, { threshold: 0.3 });
+      io.observe(svg);
+      // initial if already in view
+      animate(200);
+      return () => io.disconnect();
+    } else {
+      animate(200);
+    }
+  }, []);
+
   return (
-    <section className="relative pt-24 pb-20 min-h-[90vh] overflow-hidden hex-grid">
-      <RadarScan />
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/3 rounded-full blur-3xl" />
+    <section className="pt-10 sm:pt-14 pb-2">
+      <div className="flex flex-wrap justify-between gap-6 items-end mb-6">
+        <h1 className="font-[Space_Grotesk] font-bold text-[30px] sm:text-[42px] lg:text-[50px] leading-[1.08] max-w-[16ch] tracking-[-0.01em]">
+          Cipher resolves your dependency tree and checks every package before you ship it.
+        </h1>
+        <p className="hidden lg:block max-w-[36ch] text-[13px] leading-7 text-[var(--ink-dim)] font-mono">
+          A manifest goes in — <code className="bg-[var(--paper-2)] px-1">package.json</code>, <code className="bg-[var(--paper-2)] px-1">requirements.txt</code>, <code className="bg-[var(--paper-2)] px-1">go.mod</code>. Cipher queries OSV.dev, NVD, GHSA concurrently.
+        </p>
+      </div>
+      <p className="lg:hidden text-[13px] leading-7 text-[var(--ink-dim)] font-mono max-w-[60ch] mb-6">
+        A manifest goes in — <code>package.json</code>, <code>requirements.txt</code>, <code>go.mod</code>, or seven other formats. Cipher parses it, resolves exact versions from lock files, and queries OSV.dev, NVD, and the GitHub Advisory Database concurrently.
+      </p>
+
+      <div className="titleblock">
+        <div className="tb-cell"><span className="l">DWG NO.</span><span className="v">CIPHER-001</span></div>
+        <div className="tb-cell"><span className="l">REVISION</span><span className="v">v0.1.0</span></div>
+        <div className="tb-cell"><span className="l">AUTHOR</span><span className="v">J. I. Sartin</span></div>
+        <div className="tb-cell"><span className="l">INDEXED ADVISORIES</span><span className="v">300,412</span></div>
       </div>
 
-      <div className="relative max-w-5xl mx-auto text-center px-4 sm:px-6">
-        <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-tight">
-          <span
-            className="glitch-wrapper bg-gradient-to-r from-accent via-emerald-400 to-accent bg-clip-text text-transparent"
-            data-text="Cipher"
-          >
-            Cipher
-          </span>
-        </h1>
+      <div className="diagram-frame">
+        <svg ref={svgRef} viewBox="0 0 920 220" role="img" aria-label="Scan pipeline">
+          <path data-path d="M120,110 L170,110" className="flow-line" />
+          <path data-path d="M280,110 L310,110 L310,40 L350,40" className="flow-line" />
+          <path data-path d="M280,110 L350,110" className="flow-line" />
+          <path data-path d="M280,110 L310,110 L310,185 L350,185" className="flow-line" />
+          <path data-path d="M470,40 L500,40 L500,110 L540,110" className="flow-line" />
+          <path data-path d="M470,110 L540,110" className="flow-line" />
+          <path data-path d="M470,185 L500,185 L500,110 L540,110" className="flow-line" />
+          <path data-path d="M670,110 L740,110" className="flow-line" />
+          <g data-node><rect className="node-box" x="10" y="85" width="110" height="50"/><text className="node-label" x="65" y="106" textAnchor="middle">MANIFEST</text><text className="node-sub" x="65" y="122" textAnchor="middle">package.json</text></g>
+          <g data-node><rect className="node-box" x="170" y="85" width="110" height="50"/><text className="node-label" x="225" y="106" textAnchor="middle">PARSER</text><text className="node-sub" x="225" y="122" textAnchor="middle">clean_version()</text></g>
+          <g data-node><rect className="node-box" x="350" y="15" width="120" height="50"/><text className="node-label" x="410" y="36" textAnchor="middle">OSV.DEV</text><text className="node-sub" x="410" y="52" textAnchor="middle">primary index</text></g>
+          <g data-node><rect className="node-box" x="350" y="85" width="120" height="50"/><text className="node-label" x="410" y="106" textAnchor="middle">NVD</text><text className="node-sub" x="410" y="122" textAnchor="middle">CVSS enrichment</text></g>
+          <g data-node><rect className="node-box" x="350" y="160" width="120" height="50"/><text className="node-label" x="410" y="181" textAnchor="middle">GH ADVISORY</text><text className="node-sub" x="410" y="197" textAnchor="middle">ecosystem-specific</text></g>
+          <g data-node><rect className="node-box accent" x="540" y="85" width="130" height="50"/><text className="node-label" x="605" y="106" textAnchor="middle">CVSS GRADING</text><text className="node-sub" x="605" y="122" textAnchor="middle">severity + health</text></g>
+          <g data-node><rect className="node-box" x="740" y="85" width="150" height="50"/><text className="node-label" x="815" y="106" textAnchor="middle">OUTPUT</text><text className="node-sub" x="815" y="122" textAnchor="middle">fixes · SBOM · SARIF</text></g>
+          <text className="flow-anno" x="410" y="8">MAX_CONCURRENT = 20</text>
+        </svg>
+      </div>
+      <div className="diagram-caption">
+        <span>scanner.py:11 — concurrent OSV query pool</span>
+        <span>parser.py:1 — lock files win for exact versions</span>
+      </div>
 
-        <p className="mt-4 text-lg sm:text-xl text-gray-400 font-mono">
-          <span className="text-accent">$</span> Software Composition Analysis
-        </p>
-
-        <p className="mt-6 text-base text-gray-500 max-w-2xl mx-auto leading-relaxed font-mono text-sm">
-          <span className="text-gray-600">//</span> Scan <span className="text-accent">npm</span>, <span className="text-accent">pip</span>, <span className="text-accent">Go</span>, <span className="text-accent">Maven</span>, <span className="text-accent">Cargo</span> &mdash;
-          detect vulnerabilities, licenses, unmaintained packages, and get fix suggestions.
-          No sign-up required.
-        </p>
-
-        <div className="flex items-center justify-center gap-3 mt-8 mb-8">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-border">
-            <div className="w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_6px_rgba(0,255,65,0.6)]" />
-            <span className="text-[11px] font-mono text-accent font-medium">OSV</span>
-          </div>
-          <svg className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m0 0l-6.75-6.75M19.5 12l-6.75 6.75" />
-          </svg>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-border">
-            <div className="w-1.5 h-1.5 rounded-full bg-info shadow-[0_0_6px_rgba(55,66,250,0.6)]" />
-            <span className="text-[11px] font-mono text-info font-medium">NVD</span>
-          </div>
-          <svg className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m0 0l-6.75-6.75M19.5 12l-6.75 6.75" />
-          </svg>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-border">
-            <div className="w-1.5 h-1.5 rounded-full bg-gray-400 shadow-[0_0_6px_rgba(156,163,175,0.6)]" />
-            <span className="text-[11px] font-mono text-gray-300 font-medium">GHSA</span>
-          </div>
-        </div>
-
-        {/* Feature quick-cards */}
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto">
-          {[
-            { icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, label: "Vulnerability Scan", sub: "OSV + NVD" },
-            { icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, label: "License Check", sub: "MIT, GPL, Apache..." },
-            { icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: "Health Scores", sub: "0-100 per package" },
-            { icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>, label: "SBOM Export", sub: "SPDX · CycloneDX" },
-          ].map((f) => (
-            <div
-              key={f.label}
-              className="bg-surface-2/60 border border-border rounded-xl p-3 hover:bg-surface-2 hover:border-accent/20 transition-all group cursor-default"
-            >
-              <div className="text-accent/80 mb-1.5">{f.icon}</div>
-              <div className="text-xs font-semibold text-gray-200 group-hover:text-accent transition-colors">{f.label}</div>
-              <div className="text-[9px] font-mono text-gray-600 mt-0.5">{f.sub}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* CLI command */}
-        <div className="mt-6 flex justify-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-2 border border-border text-xs font-mono text-gray-400">
-            <span className="text-accent">$</span>
-            <span>pip install cipher</span>
-            <span className="text-gray-600">&amp;&amp;</span>
-            <span className="text-accent">cipher</span>
-            <span className="text-gray-500">scan --path ./your-project</span>
-          </div>
-        </div>
-
-        <div className="mt-8 flex flex-wrap justify-center gap-3 text-xs font-mono text-gray-500">
-          {["NO_API_KEY", "7_ECOSYSTEMS", "LOCK_FILE_SUPPORT", "SARIF_EXPORT", "CI_READY", "VSCODE_EXT"].map((tag, i) => (
-            <span
-              key={tag}
-              className="px-3 py-1.5 rounded-md bg-surface-2 border border-border text-accent/70 animate-slide-up"
-              style={{ animationDelay: `${i * 0.1}s` }}
-            >
-              {">"} {tag}
-            </span>
-          ))}
-        </div>
+      <div className="stat-strip">
+        <div className="stat-cell"><div className="n">300k+</div><div className="l">vulnerabilities indexed live</div></div>
+        <div className="stat-cell"><div className="n">20</div><div className="l">concurrent OSV queries</div></div>
+        <div className="stat-cell"><div className="n">7</div><div className="l">ecosystems supported</div></div>
+        <div className="stat-cell"><div className="n">5min</div><div className="l">advisory feed cache TTL</div></div>
       </div>
     </section>
   );
