@@ -1,46 +1,216 @@
-import { useState } from "react";
-import { authLogin, authRegister } from "../api/client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, authGoogle, authLogin, authRegister } from "../api/client";
+import { normalizeEmail, validateConfirm, validateEmail, validatePassword } from "../api/validation";
+import { toast } from "./Toast";
 
-interface Props { onClose: () => void; onAuth: (token: string) => void; initialTab?: "login" | "register"; message?: string; }
+interface Props { onClose: () => void; onAuth: () => void; initialTab?: "login" | "register"; }
 
-export function AuthModal({ onClose, onAuth, initialTab = "register", message }: Props) {
+/* "Continue with Google" needs a public OAuth client id. Until the
+   deployer sets VITE_GOOGLE_CLIENT_ID (+ CIPHER_GOOGLE_CLIENT_ID on
+   the server), the section stays hidden instead of showing a dead
+   button. Read at render time so tests can stub the env. */
+function googleClientId(): string | undefined {
+  // import.meta in the browser build; process.env fallback lets tests
+  // stub the value (vitest 5's stubEnv only covers process.env).
+  const fromMeta = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
+  const fromProc = typeof process !== "undefined" ? (process as any).env?.VITE_GOOGLE_CLIENT_ID : undefined;
+  const v = fromMeta ?? fromProc;
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+let gisPromise: Promise<void> | null = null;
+function loadGis(): Promise<void> {
+  if (gisPromise) return gisPromise;
+  gisPromise = new Promise((resolve, reject) => {
+    if ((window as any).google?.accounts?.id) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.defer = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("gis-load-failed"));
+    document.head.appendChild(s);
+  });
+  return gisPromise;
+}
+
+/* Account modal: Sign in vs Create account tabs route to DIFFERENT
+   endpoints (authLogin / authRegister). Client validation mirrors
+   the backend (api/validation.ts) so rejections match byte for byte;
+   server statuses are mapped (409 → suggest sign-in, 429 → wait). */
+
+const inputStyle: React.CSSProperties = {
+  width: "100%", padding: "8px 12px", background: "var(--bg)",
+  border: "1px solid var(--line)", borderRadius: "4px",
+  fontFamily: "var(--font-mono)", fontSize: "13px",
+  color: "var(--ink)", outline: "none", boxSizing: "border-box",
+};
+const errStyle: React.CSSProperties = {
+  fontFamily: "var(--font-mono)", fontSize: "11px",
+  color: "var(--crit)", marginTop: "4px",
+};
+
+export function AuthModal({ onClose, onAuth, initialTab = "register" }: Props) {
+  if (!onClose || !onAuth) return null;
   const [tab, setTab] = useState<"login" | "register">(initialTab);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [fieldErr, setFieldErr] = useState<{ email?: string; password?: string; confirm?: string }>({});
+  const [serverErr, setServerErr] = useState<string | null>(null);
+  const [conflictEmail, setConflictEmail] = useState(false);
   const [loading, setLoading] = useState(false);
-  const submit = async () => {
-    setError(null);
-    const em = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em) || em.length>254) { setError("Enter a valid email"); return; }
-    if (password.length<8) { setError("Password must be at least 8 characters"); return; }
-    if (password.length>128) { setError("Password too long"); return; }
-    setLoading(true);
-    try { const fn = tab==="login"?authLogin:authRegister; const d = await fn(em,password); onAuth(d.token); onClose(); }
-    catch (e:any) { setError(typeof e.message==="string"?e.message.slice(0,200):"Failed"); }
-    finally { setLoading(false); }
+  const [googleReady, setGoogleReady] = useState(false);
+  const googleBtnRef = useRef<HTMLDivElement | null>(null);
+  // Latest callbacks for the GIS credential handler (registered once).
+  const authRef = useRef({ onAuth, onClose });
+  authRef.current = { onAuth, onClose };
+
+  const handleGoogle = useCallback(async (resp: { credential?: string }) => {
+    if (!resp?.credential) { setServerErr("Google sign-in was cancelled."); return; }
+    setServerErr(null); setConflictEmail(false); setLoading(true);
+    try {
+      const r = await authGoogle(resp.credential);
+      toast(r.is_new ? "Google account created — unlimited scans" : "Signed in with Google — unlimited scans");
+      authRef.current.onAuth();
+      authRef.current.onClose();
+    } catch (err: any) {
+      if (err instanceof ApiError && err.status === 500) {
+        setServerErr("Google sign-in is not configured on this server.");
+      } else {
+        setServerErr(typeof err?.message === "string" ? err.message.slice(0, 200) : "Google sign-in failed.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const clientId = googleClientId();
+    if (!clientId) return;
+    let live = true;
+    loadGis()
+      .then(() => {
+        if (!live) return;
+        const google = (window as any).google;
+        google.accounts.id.initialize({ client_id: clientId, callback: handleGoogle, auto_select: false });
+        if (googleBtnRef.current) {
+          google.accounts.id.renderButton(googleBtnRef.current, { theme: "outline", size: "large", width: 320, text: "continue_with" });
+          setGoogleReady(true);
+        }
+      })
+      .catch(() => { /* GIS unreachable: section stays in loading state, form still works */ });
+    return () => { live = false; };
+  }, [handleGoogle]);
+
+  const switchTab = (t: "login" | "register") => {
+    setTab(t); setFieldErr({}); setServerErr(null); setConflictEmail(false);
   };
+
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setServerErr(null); setConflictEmail(false);
+    const errs: typeof fieldErr = {};
+    const emailErr = validateEmail(email);
+    if (emailErr) errs.email = emailErr;
+    const pwErr = validatePassword(password);
+    if (pwErr) errs.password = pwErr;
+    if (tab === "register") {
+      const cErr = validateConfirm(password, confirm);
+      if (cErr) errs.confirm = cErr;
+    }
+    setFieldErr(errs);
+    if (Object.keys(errs).length > 0) return;
+    setLoading(true);
+    try {
+      if (tab === "login") await authLogin(normalizeEmail(email), password);
+      else await authRegister(normalizeEmail(email), password);
+      toast(tab === "login" ? "Signed in — unlimited scans" : "Account created — unlimited scans");
+      onAuth();
+      onClose();
+    } catch (err: any) {
+      if (err instanceof ApiError && err.status === 409 && tab === "register") {
+        setConflictEmail(true);
+        setServerErr("Email already registered.");
+      } else if (err instanceof ApiError && err.status === 429) {
+        setServerErr(typeof err.message === "string" ? err.message.slice(0, 200) : "Too many attempts — try again later.");
+      } else if (err instanceof ApiError && err.status === 401) {
+        setServerErr("Invalid email or password.");
+      } else {
+        setServerErr(typeof err?.message === "string" ? err.message.slice(0, 200) : "Authentication failed.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[#12181F]/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-[#EDF1F4] border border-[#12181F] p-0 animate-slide-up">
-        <div className="flex items-center justify-between border-b border-[#12181F] bg-[#E3E9ED] px-4 py-3">
-          <h2 className="font-[Space_Grotesk] font-bold text-sm flex items-center gap-2"><span className="w-7 h-7 bg-[#12181F] text-[#EDF1F4] flex items-center justify-center text-xs">◈</span>{tab==="login"?"Sign In":"Create Account"}</h2>
-          <button onClick={onClose} className="w-7 h-7 border border-[#12181F] flex items-center justify-center text-[#4C5A67] hover:bg-[#12181F] hover:text-[#EDF1F4]">✕</button>
+    <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal">
+        <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "16px" }}>
+          {tab === "login" ? "Sign in" : "Create account"}
         </div>
-        {message && <div className="m-4 p-2.5 border border-[#A85419] bg-[#A85419]/10 text-[#A85419] text-xs font-mono">{message}</div>}
-        <div className="flex gap-0 border-b border-[#12181F] mx-4 mt-4">
-          {(["register","login"] as const).map(t=>(
-            <button key={t} onClick={()=>setTab(t)} className={`flex-1 py-2 text-xs font-mono font-semibold border border-b-0 last:border-l-0 ${tab===t?"bg-[#12181F] text-[#EDF1F4] border-[#12181F]":"bg-white text-[#4C5A67] border-[#B7C3CB] hover:text-[#12181F]"}`}>{t==="register"?"Create account":"Sign in"}</button>
-          ))}
+        <div style={{ display: "flex", gap: "4px", background: "var(--bg)", borderRadius: "4px", padding: "3px", marginBottom: "20px" }}>
+          <button type="button" onClick={() => switchTab("login")} style={{ flex: 1, padding: "6px", background: tab === "login" ? "var(--line)" : "transparent", color: tab === "login" ? "var(--ink)" : "var(--muted)", fontFamily: "var(--font-mono)", fontSize: "13px", border: "none", borderRadius: "4px", cursor: "pointer" }}>Sign in</button>
+          <button type="button" onClick={() => switchTab("register")} style={{ flex: 1, padding: "6px", background: tab === "register" ? "var(--line)" : "transparent", color: tab === "register" ? "var(--ink)" : "var(--muted)", fontFamily: "var(--font-mono)", fontSize: "13px", border: "none", borderRadius: "4px", cursor: "pointer" }}>Register</button>
         </div>
-        <div className="p-4 space-y-3">
-          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" className="w-full px-3 py-2.5 bg-white border border-[#12181F] text-sm font-mono text-[#12181F] placeholder:text-[#8593A1] focus:outline-none focus:border-[#C1273B]" />
-          <input value={password} onChange={e=>setPassword(e.target.value)} type="password" placeholder="password (min 8 chars)" autoComplete={tab==="login"?"current-password":"new-password"} className="w-full px-3 py-2.5 bg-white border border-[#12181F] text-sm font-mono text-[#12181F] placeholder:text-[#8593A1] focus:outline-none focus:border-[#C1273B]" onKeyDown={e=>e.key==="Enter"&&submit()} />
-          {error && <p className="text-xs font-mono text-[#C1273B] border border-[#C1273B]/30 bg-[#C1273B]/5 px-2 py-1.5">{error}</p>}
-          <button onClick={submit} disabled={loading} className="w-full py-2.5 bg-[#12181F] text-[#EDF1F4] border border-[#12181F] font-mono text-xs font-bold hover:bg-white hover:text-[#12181F] disabled:opacity-50 transition-colors">{loading?"Please wait…":tab==="login"?"Sign In — Unlimited scans":"Create Account — Unlimited scans"}</button>
-          <p className="text-[11px] font-mono text-center text-[#8593A1]">Anonymous 5 scans. Accounts get unlimited.</p>
-        </div>
+        <form onSubmit={submit} noValidate>
+          <div className="field">
+            <label className="field-label" htmlFor="auth-email">Email</label>
+            <input id="auth-email" type="email" autoFocus autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setFieldErr((f) => ({ ...f, email: undefined })); }} placeholder="you@example.com" style={{ ...inputStyle, borderColor: fieldErr.email ? "var(--crit)" : "var(--line)" }} />
+            {fieldErr.email && <div style={errStyle}>{fieldErr.email}</div>}
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="auth-password">Password</label>
+            <div style={{ position: "relative" }}>
+              <input id="auth-password" type={showPw ? "text" : "password"} autoComplete={tab === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => { setPassword(e.target.value); setFieldErr((f) => ({ ...f, password: undefined })); }} placeholder="••••••••" style={{ ...inputStyle, paddingRight: "64px", borderColor: fieldErr.password ? "var(--crit)" : "var(--line)" }} />
+              <button type="button" onClick={() => setShowPw((s) => !s)} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: "11px", cursor: "pointer" }}>
+                {showPw ? "hide" : "show"}
+              </button>
+            </div>
+            {fieldErr.password && <div style={errStyle}>{fieldErr.password}</div>}
+          </div>
+          {tab === "register" && (
+            <div className="field">
+              <label className="field-label" htmlFor="auth-confirm">Confirm password</label>
+              <input id="auth-confirm" type={showPw ? "text" : "password"} autoComplete="new-password" value={confirm} onChange={(e) => { setConfirm(e.target.value); setFieldErr((f) => ({ ...f, confirm: undefined })); }} placeholder="••••••••" style={{ ...inputStyle, borderColor: fieldErr.confirm ? "var(--crit)" : "var(--line)" }} />
+              {fieldErr.confirm && <div style={errStyle}>{fieldErr.confirm}</div>}
+            </div>
+          )}
+          {serverErr && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--crit)", marginBottom: "12px" }}>
+              {serverErr}
+              {conflictEmail && (
+                <button type="button" onClick={() => switchTab("login")} style={{ display: "block", marginTop: "6px", background: "transparent", border: "none", padding: 0, color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}>
+                  Switch to sign in →
+                </button>
+              )}
+            </div>
+          )}
+          <button type="submit" data-testid="auth-submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", opacity: loading ? 0.6 : 1 }}>
+            {loading ? "Working…" : tab === "login" ? "Sign in" : "Create account"}
+          </button>
+        </form>
+        {googleClientId() && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "16px 0 12px" }}>
+              <div style={{ flex: 1, height: "1px", background: "var(--line)" }} />
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted2)" }}>or</span>
+              <div style={{ flex: 1, height: "1px", background: "var(--line)" }} />
+            </div>
+            <div ref={googleBtnRef} style={{ display: "flex", justifyContent: "center" }} />
+            {!googleReady && (
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted2)", textAlign: "center", marginTop: "8px" }}>
+                Loading Google sign-in…
+              </div>
+            )}
+          </>
+        )}
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted2)", textAlign: "center", marginTop: "12px" }}>
+          or <a href="#" onClick={(ev) => { ev.preventDefault(); onClose(); toast("Continuing anonymously — 5 scans/day"); }} style={{ color: "var(--muted)", textDecoration: "underline" }}>continue anonymously</a>
+        </p>
       </div>
     </div>
   );
