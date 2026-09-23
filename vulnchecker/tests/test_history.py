@@ -1,8 +1,14 @@
 import pytest
+import random
 from vulnchecker.history import save_scan, get_history, get_scan
 
+def _unique_user_id() -> int:
+    """User ids are autoincrement ints starting near 1, so a large random
+    id is collision-proof across runs against the shared dev DB."""
+    return random.randint(10**8, 10**9)
+
 def test_save_and_get_scan():
-    user_id = 1
+    user_id = _unique_user_id()
     summary = {
         "total_packages": 10,
         "vulnerable_packages": 2,
@@ -20,7 +26,7 @@ def test_save_and_get_scan():
     assert scan["project_name"] == "test-project"
 
 def test_get_history():
-    user_id = 1
+    user_id = _unique_user_id()
     # Save a few scans
     for i in range(3):
         save_scan(user_id, {"total_packages": i}, [], [], f"project-{i}")

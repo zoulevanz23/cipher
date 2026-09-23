@@ -8,14 +8,25 @@ export function setToken(t: string) { localStorage.setItem(TOKEN_KEY, t); }
 export function clearToken() { localStorage.removeItem(TOKEN_KEY); }
 function authHeader(): Record<string, string> { const t = getToken(); return t ? { Authorization: `Bearer ${t}` } : {}; }
 
+/* API errors carry their HTTP status so the UI can map cases
+   (409 conflict → suggest sign-in, 429 → show wait time). */
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function authRegister(email: string, password: string): Promise<{ token: string; user_id: number }> {
   const r = await fetch(`${BASE}/auth/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
-  const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || "Register failed");
+  const d = await r.json().catch(() => ({})); if (!r.ok) throw new ApiError(r.status, d.detail || "Register failed");
   setToken(d.token); return d;
 }
 export async function authLogin(email: string, password: string): Promise<{ token: string }> {
   const r = await fetch(`${BASE}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
-  const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || "Login failed");
+  const d = await r.json().catch(() => ({})); if (!r.ok) throw new ApiError(r.status, d.detail || "Login failed");
   setToken(d.token); return d;
 }
 export async function authAnonymous(): Promise<{ token: string }> {
@@ -23,9 +34,48 @@ export async function authAnonymous(): Promise<{ token: string }> {
   const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || "Anonymous failed");
   setToken(d.token); return d;
 }
-export async function authMe(): Promise<{ user_id: number; email: string; is_anonymous: boolean; credits: { credits: number; reset_in_hours: number } }> {
+/* Google Identity Services sign-in. The backend verifies the ID token
+   and auto-creates the account on first sign-in. */
+export async function authGoogle(idToken: string): Promise<{ token: string; user_id: number; email: string; is_new: boolean }> {
+  const r = await fetch(`${BASE}/auth/google`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id_token: idToken }) });
+  const d = await r.json().catch(() => ({})); if (!r.ok) throw new ApiError(r.status, d.detail || "Google sign-in failed");
+  setToken(d.token); return d;
+}
+export interface AuthMe {
+  user_id: number;
+  email: string;
+  is_anonymous: boolean;
+  created_at: string | null;
+  credits: { credits: number; reset_in_hours: number };
+  stats: { scan_count: number; total_vulnerabilities: number };
+}
+
+export async function authMe(): Promise<AuthMe> {
   const r = await fetch(`${BASE}/auth/me`, { headers: { ...authHeader() } });
   if (!r.ok) throw new Error("Not authenticated");
+  return r.json();
+}
+
+export interface HistoryEntry {
+  id: number;
+  timestamp: string;
+  project_name: string;
+  total_packages: number;
+  vulnerable_packages: number;
+  total_vulnerabilities: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  results_json?: string;
+  fixes_json?: string;
+}
+
+/* Fetch one saved scan from the caller's own history. */
+export async function getHistoryScan(scanId: number): Promise<HistoryEntry> {
+  const r = await fetch(`${BASE}/scan/history/${scanId}`, { headers: { ...authHeader() } });
+  if (r.status === 404) throw new Error("Scan not found in your history.");
+  if (!r.ok) throw new Error("Could not load scan.");
   return r.json();
 }
 
