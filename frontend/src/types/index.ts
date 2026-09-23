@@ -98,3 +98,18 @@ export interface ScanProgressEvent {
   scan?: ScanResponse;
   detail?: string;
 }
+
+export interface NavbarProps {
+  activeView: string;
+  auth?: { email: string; isAnonymous: boolean; credits: number } | null;
+  onLogout?: () => void;
+  onProfile?: () => void;
+  onSignIn?: () => void;
+  onHistory?: () => void;
+  onNews?: () => void;
+  onAbout?: () => void;
+  onFeatures?: () => void;
+  onHome?: () => void;
+  onScanner?: () => void;
+  onResults?: () => void;
+}
