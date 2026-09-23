@@ -108,6 +108,12 @@ def _init_tables() -> None:
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+    # OAuth linkage columns (Google sign-in). ALTER is a no-op on fresh DBs.
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "oauth_provider" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN oauth_provider TEXT")
+    if "oauth_sub" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN oauth_sub TEXT")
     conn.commit()
     conn.close()
 
@@ -127,11 +133,17 @@ def create_user(email: str, password: str) -> int:
     conn = _get_conn()
     password_hash = hash_password(password)
     now = datetime.now(timezone.utc).isoformat()
-    cursor = conn.execute(
-        "INSERT INTO users (email, password_hash, created_at, credits, credits_updated_at) VALUES (?, ?, ?, 0, ?)",
-        (email, password_hash, now, now),
-    )
-    conn.commit()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO users (email, password_hash, created_at, credits, credits_updated_at) VALUES (?, ?, ?, 0, ?)",
+            (email, password_hash, now, now),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Race-safe second net: the endpoint pre-checks, but two
+        # concurrent registrations could both pass it.
+        conn.close()
+        raise ValueError("Email already registered")
     user_id = cursor.lastrowid
     conn.close()
     return user_id
@@ -167,8 +179,58 @@ def create_anonymous() -> int:
 
 
 # backwards compat — old extension versions still call this
+# backwards compat — old extension versions still call this
 def get_or_create_anonymous() -> tuple[int, bool]:
     return create_anonymous(), True
+
+
+def get_or_create_oauth_user(email: str, provider: str, sub: str) -> tuple[int, bool]:
+    """Find-or-create for OAuth sign-ins: Google auto-creates the account
+    on first sign-in. Matches the stable provider subject first, then a
+    password account sharing the verified OAuth email (linked)."""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT id FROM users WHERE oauth_provider = ? AND oauth_sub = ?",
+        (provider, sub),
+    ).fetchone()
+    if row:
+        conn.close()
+        return row["id"], False
+    existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE users SET oauth_provider = ?, oauth_sub = ? WHERE id = ?",
+            (provider, sub, existing["id"]),
+        )
+        conn.commit()
+        conn.close()
+        return existing["id"], False
+    now = datetime.now(timezone.utc).isoformat()
+    unusable = "oauth$" + secrets.token_hex(32)
+    cursor = conn.execute(
+        "INSERT INTO users (email, password_hash, created_at, credits, credits_updated_at, oauth_provider, oauth_sub) VALUES (?, ?, ?, 0, ?, ?, ?)",
+        (email, unusable, now, now, provider, sub),
+    )
+    conn.commit()
+    user_id = cursor.lastrowid
+    conn.close()
+    return user_id, True
+
+
+def google_client_id() -> str:
+    return os.getenv("CIPHER_GOOGLE_CLIENT_ID", "")
+
+
+def verify_google_id_token(id_token: str, client_id: str) -> Optional[dict]:
+    """Verify a Google Identity Services ID token. Returns the claims
+    (email, email_verified, sub, ...) or None. Lazy import keeps CLI
+    contexts working without the optional dependency loaded."""
+    try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+        return dict(google_id_token.verify_oauth2_token(id_token, google_requests.Request(), client_id))
+    except Exception:
+        return None
 
 
 def generate_token(user_id: int) -> str:
@@ -231,7 +293,15 @@ def check_and_consume_credits(user_id: int) -> tuple[bool, int]:
 
 def generate_login_token(email: str, password: str) -> Optional[str]:
     user = get_user_by_email(email)
-    if not user or not verify_password(password, user["password_hash"]):
+    if not user:
+        return None
+    try:
+        # OAuth-created rows carry a non-bcrypt placeholder hash, which
+        # bcrypt rejects with ValueError — treat as "no password set".
+        ok = verify_password(password, user["password_hash"])
+    except (ValueError, TypeError):
+        return None
+    if not ok:
         return None
     return generate_token(user["id"])
 
@@ -243,7 +313,13 @@ def change_password(user_id: int, old_password: str, new_password: str) -> tuple
         return False, "User not found"
     if user.get("is_anonymous"):
         return False, "Anonymous accounts have no password"
-    if not verify_password(old_password, user["password_hash"]):
+    if user.get("oauth_provider") and user["password_hash"].startswith("oauth$"):
+        return False, "This account uses Google sign-in — set no password here"
+    try:
+        current_ok = verify_password(old_password, user["password_hash"])
+    except (ValueError, TypeError):
+        return False, "Current password is incorrect"
+    if not current_ok:
         return False, "Current password is incorrect"
     pw_err = validate_password(new_password)
     if pw_err:
