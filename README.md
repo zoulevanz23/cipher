@@ -1,392 +1,330 @@
-# 🔒 Cipher - Vulnerability Dependency Scanner
+# VulnChecker
 
-A comprehensive security tool for scanning dependency vulnerabilities across multiple ecosystems with real-time OSV API integration, modern web UI, and CLI support.
+A dependency vulnerability scanner that checks package manifests against the OSV API to identify known security vulnerabilities.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![React](https://img.shields.io/badge/React-19.1+-61DAFB.svg)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-3178C6.svg)](https://www.typescriptlang.org/)
+---
 
-## ✨ Features
+## Project Overview
 
-### 🔍 Core Security Scanning
-- **Multi-Ecosystem Support**: npm, pip, Go, Maven, NuGet, RubyGems, Cargo
-- **Real-time Vulnerability Detection**: Queries OSV.dev, NVD, and GitHub Advisory Database
-- **Severity Classification**: Critical, High, Medium, Low with CVSS scoring
-- **Lock File Support**: package-lock.json, yarn.lock, pnpm-lock.yaml, requirements.txt, go.mod, Cargo.toml
+VulnChecker scans dependency files across multiple package ecosystems (npm, PyPI, Go, Maven, NuGet, RubyGems, Cargo) and reports known security vulnerabilities by querying the Open Source Vulnerabilities (OSV) database. The project provides three interfaces: a CLI tool for local scanning, a FastAPI backend with a React web UI, and a VS Code extension for in-editor diagnostics.
 
-### 📊 Advanced Analytics
-- **Health Scoring**: 0-100 health scores with letter grades (A-F) per package
-- **License Scanning**: MIT, GPL, Apache detection and compliance checking
-- **Unmaintained Detection**: Flags packages with no updates in 2+ years
-- **Dependency Tree Visualization**: Transitive dependency analysis
-- **Vulnerability Aging**: Track how long vulnerabilities have existed
+The scanner extracts package names and versions from manifest and lock files, queries the OSV API for vulnerability data, and enriches results with additional context from the NVD database and Exploit Prediction Scoring System (EPSS). It supports multiple output formats including SARIF for GitHub code scanning integration, SPDX and CycloneDX for SBOM generation, and CSV/HTML for reporting.
 
-### 🛠️ Developer Tools
-- **Fix Suggestions**: Automated version upgrade recommendations
-- **Risk Classification**: Safe (patch), Low Risk (minor), Breaking (major) updates
-- **SBOM Export**: SPDX 2.3 and CycloneDX 1.5 formats
-- **Multiple Export Formats**: SARIF (GitHub code scanning), CSV, HTML reports
-- **Monorepo Support**: Auto-detects pnpm workspaces, Lerna, Nx, Turbo
+The backend uses SQLite for persistent scan history and user accounts, with JWT-based authentication supporting both email/password and Google OAuth. Anonymous users receive a limited number of daily scans, while registered accounts have unlimited access. The CLI supports ecosystem auto-detection, lock file parsing, severity filtering, and CI/CD exit codes for build failures.
 
-### 🌐 Integration & Automation
-- **Web UI**: Modern cyber-aesthetic interface with dark/light mode
-- **CLI Tool**: Rich terminal output with table, JSON, and summary formats
-- **VS Code Extension**: Inline vulnerability diagnostics
-- **CI/CD Integration**: GitHub Actions workflows with SARIF upload
-- **PR Comments**: Post scan results as GitHub PR comments
-- **Security News Feed**: Live advisory feed from GitHub Advisory Database
+---
 
-### 📈 Historical Tracking
-- **Scan History**: SQLite-backed persistent scan history
-- **Trend Analysis**: Vulnerability trends over time
-- **Comparative Scans**: Compare current vs previous scans
+## Key Features
 
-## 🚀 Quick Start
+### Multi-Ecosystem Support
+- Parses manifest files for npm (package.json, package-lock.json, yarn.lock, pnpm-lock.yaml), Python (requirements.txt, Pipfile, pyproject.toml), Go (go.mod), Rust (Cargo.toml), Ruby (Gemfile.lock), Maven (pom.xml), and NuGet (packages.config, .csproj)
+- Auto-detects project ecosystem from directory structure
+- Supports monorepo detection for pnpm workspaces, Lerna, Nx, and Turbo
 
-### Prerequisites
-- Python 3.10+
-- Node.js 20+
-- Git
+### Vulnerability Scanning
+- Queries OSV.dev API for vulnerability data using batch queries (up to 100 packages per request)
+- Enriches CVE entries with CVSS scores and vectors from NVD API
+- Fetches EPSS (Exploit Prediction Scoring System) scores and percentiles for CVEs
+- Implements retry logic with exponential backoff for API failures
+- Caches scan results to reduce redundant API calls
 
-### Installation
+### Analysis and Reporting
+- Classifies severity as Critical, High, Medium, or Low based on CVSS scores
+- Computes package health scores (0-100) considering vulnerability count, severity, license type, and maintenance status
+- Detects unmaintained packages (no updates for 2+ years) by querying package registries
+- Provides fix suggestions by querying npm and PyPI registries for latest versions
+- Classifies upgrade risk as safe (patch), minor, or breaking based on semver changes
 
-#### Option 1: Install from PyPI
-```bash
-pip install cipher
+### Output Formats
+- CLI output in table format (default), JSON, summary, HTML, SPDX, CycloneDX, SARIF, or CSV
+- Web UI with severity filtering, sortable results, and export buttons
+- SARIF format compatible with GitHub code scanning upload
+- SPDX 2.3 and CycloneDX 1.5 SBOM generation
+
+### Authentication and History
+- SQLite database for user accounts and scan history
+- Email/password authentication with bcrypt hashing
+- Google OAuth 2.0 integration for sign-in
+- JWT tokens with 24-hour expiration
+- Rate limiting on registration, login, and anonymous account creation
+- Anonymous users receive 5 daily scan credits with 24-hour reset
+- Registered users have unlimited scans
+
+### VS Code Extension
+- Inline diagnostics in package.json and other manifest files
+- Activity bar view showing vulnerability details
+- Commands for scanning files, clearing diagnostics, and account management
+- Configuration options for server URL, minimum severity, and scan-on-save behavior
+
+### CI/CD Integration
+- GitHub Actions workflow that runs scans and uploads SARIF results
+- CLI option to fail builds based on vulnerability severity (--fail-on)
+- Support for posting scan results as GitHub PR comments
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Clients
+        CLI[CLI Tool]
+        Web[React Web UI]
+        VSCode[VS Code Extension]
+    end
+
+    subgraph Backend
+        API[FastAPI Server]
+        Auth[Authentication]
+        Scanner[Scanner Module]
+        Parser[Parser Module]
+        Cache[Cache Layer]
+        DB[SQLite Database]
+    end
+
+    subgraph External
+        OSV[OSV API]
+        NVD[NVD API]
+        EPSS[EPSS API]
+        NPM[NPM Registry]
+        PyPI[PyPI Registry]
+        GitHub[GitHub Advisory API]
+    end
+
+    CLI --> API
+    Web --> API
+    VSCode --> API
+
+    API --> Auth
+    API --> Scanner
+    API --> DB
+
+    Scanner --> Parser
+    Scanner --> Cache
+    Scanner --> OSV
+    Scanner --> NVD
+    Scanner --> EPSS
+
+    Scanner --> NPM
+    Scanner --> PyPI
+
+    API --> GitHub
 ```
 
-#### Option 2: Install from Source
+### Backend Components
+
+- **main.py**: FastAPI application with endpoints for scanning, authentication, scan history, exports, and news feed
+- **scanner.py**: Core scanning logic with OSV API integration, batch queries, concurrent processing (max 20 concurrent), and result composition
+- **parsers/**: Ecosystem-specific parsers for extracting dependencies from manifest files
+- **account.py**: User authentication, JWT token management, credit system, and rate limiting
+- **history.py**: SQLite operations for saving and retrieving scan history
+- **fixer.py**: Queries package registries for latest versions and generates fix suggestions
+- **license.py**: Fetches license and last-updated metadata from npm and PyPI registries
+- **health.py**: Computes health scores based on vulnerability severity, license type, and maintenance status
+- **sbom.py**: Generates SPDX 2.3 and CycloneDX 1.5 SBOM documents
+- **export.py**: Generates SARIF and CSV export formats
+- **report.py**: Generates HTML reports
+- **news.py**: Fetches recent security advisories from GitHub Advisory Database with 5-minute cache
+- **pr_comment.py**: Formats and posts scan results as GitHub PR comments
+- **monorepo.py**: Detects monorepo configurations (pnpm, Lerna, Nx, Turbo)
+- **tree.py**: Builds dependency trees from lock files
+
+### Frontend Components
+
+- React 19 with TypeScript
+- Vite for build tooling
+- TailwindCSS for styling
+- Components for scanning interface, results dashboard, severity charts, history view, and authentication modals
+- Server-sent events (SSE) for real-time scan progress updates
+
+### Database Schema
+
+SQLite database with two tables:
+- **users**: id, email, password_hash, created_at, credits, credits_updated_at, is_anonymous, oauth_provider, oauth_sub, last_scan_at
+- **scans**: id, timestamp, user_id, project_name, total_packages, vulnerable_packages, total_vulnerabilities, severity breakdowns, results_json, fixes_json
+
+---
+
+## Installation
+
+### From Source
+
 ```bash
 git clone https://github.com/zoulevanz23/cipher.git
-cd cipher
+cd vuln-checker
 pip install -r requirements.txt
 ```
 
-### Web UI Usage
+### Web UI Setup
 
-1. **Start the Backend**
 ```bash
-cd cipher
+# Backend
 python -m uvicorn vulnchecker.main:app --reload --host 0.0.0.0 --port 8000
-```
 
-2. **Start the Frontend**
-```bash
-cd cipher/frontend
+# Frontend
+cd frontend
 npm install
 npm run dev
 ```
 
-3. **Open in Browser**
-Navigate to `http://localhost:5173`
+Access the web UI at `http://localhost:5173`
 
-### CLI Usage
+---
 
-#### Basic Scan
+## CLI Usage
+
+### Basic Scan
+
 ```bash
-# Scan current directory
-cipher --path .
+# Scan current directory (auto-detects ecosystem)
+vulnchecker --path .
 
 # Scan with lock file for exact versions
-cipher --path . --lock-file
+vulnchecker --path . --lock-file
 
-# Minimum severity threshold
-cipher --path . --min-severity high
+# Filter by minimum severity
+vulnchecker --path . --min-severity high
 ```
 
-#### Output Formats
+### Output Formats
+
 ```bash
-# Table output (default)
-cipher --path . --format table
+# Table (default)
+vulnchecker --path . --format table
 
-# JSON output
-cipher --path . --format json -o results.json
+# JSON
+vulnchecker --path . --format json -o results.json
 
-# Summary only
-cipher --path . --format summary
+# Summary
+vulnchecker --path . --format summary
+
+# SBOM formats
+vulnchecker --path . --format spdx -o sbom.json
+vulnchecker --path . --format cyclonedx -o sbom.json
+
+# SARIF for GitHub
+vulnchecker --path . --format sarif -o results.sarif
 ```
 
-#### CI/CD Integration
+### CI/CD Integration
+
 ```bash
-# Fail on vulnerabilities
-cipher --path . --fail-on high
+# Fail build if high or critical vulnerabilities found
+vulnchecker --path . --fail-on high
 
-# Exit with error code if critical vulnerabilities found
-cipher --path . --fail-on critical
+# Fail on any vulnerability
+vulnchecker --path . --fail-on any
 ```
 
-#### Ecosystem Support
+### Ecosystem Specification
+
 ```bash
-# Python projects
-cipher --path /path/to/python-project --ecosystem pip
-
-# Go projects
-cipher --path /path/to/go-project --ecosystem go
-
-# Rust projects
-cipher --path /path/to/rust-project --ecosystem cargo
+vulnchecker --path /path/to/project --ecosystem pip
+vulnchecker --path /path/to/project --ecosystem go
+vulnchecker --path /path/to/project --ecosystem cargo
 ```
 
-## 📁 Project Structure
+### Configuration
 
-```
-cipher/
-├── vulnchecker/              # Python backend
-│   ├── __init__.py
-│   ├── main.py              # FastAPI server
-│   ├── cli.py               # CLI interface
-│   ├── scanner.py           # OSV API integration
-│   ├── parser.py            # Dependency parsing
-│   ├── fixer.py             # Fix suggestions
-│   ├── export.py            # SBOM/Report generation
-│   ├── health.py            # Health scoring
-│   ├── license.py           # License detection
-│   ├── history.py           # Scan history
-│   ├── news.py              # Security news feed
-│   └── ...
-├── frontend/                 # React web UI
-│   ├── src/
-│   │   ├── components/      # React components
-│   │   ├── api/            # API client
-│   │   ├── types/          # TypeScript types
-│   │   └── main.tsx        # Entry point
-│   ├── package.json
-│   └── vite.config.ts
-├── vscode-vulnchecker/      # VS Code extension
-│   ├── src/
-│   │   └── extension.ts    # Extension logic
-│   └── package.json
-├── .github/workflows/       # CI/CD workflows
-├── pyproject.toml          # Python project config
-├── requirements.txt         # Python dependencies
-└── README.md
-```
-
-## 🔧 Configuration
-
-### Configuration File (.cipherrc)
-
-Create a `.cipherrc` file in your project root:
+Create a `.vulncheckerrc` file in your project root:
 
 ```json
 {
   "min_severity": "medium",
-  "ignore": [
-    "GHSA-xxxx-xxxx-xxxx"
-  ],
-  "ignore_until": {
-    "GHSA-yyyy-yyyy-yyyy": "2024-12-31"
-  },
+  "ignore": ["GHSA-xxxx-xxxx-xxxx"],
+  "ignore_until": {"GHSA-yyyy-yyyy-yyyy": "2024-12-31"},
   "ecosystem": "npm",
   "use_lock_file": true
 }
 ```
 
-### Environment Variables
+---
+
+## Environment Variables
 
 ```bash
-# API server URL (for web UI)
+# Backend
 CIPHER_SERVER_URL=http://localhost:8000
-
-# GitHub token for PR comments
+CIPHER_GOOGLE_CLIENT_ID=your_google_client_id
+CIPHER_JWT_SECRET=your_jwt_secret
+OSV_API_URL=https://api.osv.dev/v1
 GITHUB_TOKEN=your_github_token
 
-# Custom OSV API endpoint
-OSV_API_URL=https://api.osv.dev/v1
+# Frontend
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
 ```
 
-## 🎨 Web UI Features
+---
 
-### Scanning Interface
-- **Paste JSON**: Directly paste package.json content
-- **Upload File**: Drag-and-drop dependency files
-- **Try Example**: Test with sample vulnerable packages
-
-### Results Dashboard
-- **Severity Filtering**: Filter by Critical, High, Medium, Low
-- **Sortable Results**: Sort by severity or package name
-- **Detailed Views**: Click packages for full vulnerability details
-- **Export Options**: One-click export to multiple formats
-
-### Visual Analytics
-- **Stats Cards**: Quick overview of scan results
-- **Severity Charts**: Visual breakdown of vulnerability levels
-- **Health Scores**: Package health indicators
-- **Trend Analysis**: Historical vulnerability trends
-
-## 🔌 VS Code Extension
-
-### Installation
-1. Open VS Code
-2. Go to Extensions
-3. Search for "Cipher Vulnerability Scanner"
-4. Click Install
-
-### Features
-- **Inline Diagnostics**: Vulnerability warnings in package.json
-- **Scan Command**: Right-click → "Scan for vulnerabilities"
-- **Results Panel**: View detailed results in sidebar
-- **Quick Fix**: Apply suggested fixes directly
-
-### Commands
-- `Cipher: Scan current file`
-- `Cipher: Open results panel`
-- `Cipher: Clear diagnostics`
-
-## 🔄 CI/CD Integration
-
-### GitHub Actions Example
+## CI/CD Example
 
 ```yaml
 name: Security Scan
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
   schedule:
-    - cron: '0 9 * * 1'  # Weekly
+    - cron: '0 6 * * 1'
 
 jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
-      - name: Install Cipher
-        run: pip install cipher
-      
+      - name: Install VulnChecker
+        run: pip install -r requirements.txt
       - name: Scan dependencies
-        run: cipher --path . --format json --output results.json
-      
+        run: python -m vulnchecker --path . --format json --output results.json
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: results.json
 ```
 
-### Pre-commit Hook
+---
+
+## Development
+
+### Running Tests
 
 ```bash
-# Install pre-commit
-pip install pre-commit
-
-# Add to .pre-commit-config.yaml
-repos:
-  - repo: local
-    hooks:
-      - id: cipher-scan
-        name: Cipher Security Scan
-        entry: cipher --path . --fail-on high
-        language: system
-        files: package.json
+pytest vulnchecker/tests/
 ```
 
-## 📊 Export Formats
+### Project Structure
 
-### SPDX SBOM
-```bash
-cipher --path . --export spdx -o sbom.spdx.json
 ```
-
-### CycloneDX SBOM
-```bash
-cipher --path . --export cyclonedx -o sbom.json
+vuln-checker/
+├── vulnchecker/          # Python backend
+│   ├── main.py          # FastAPI server
+│   ├── cli.py           # CLI interface
+│   ├── scanner.py       # OSV API integration
+│   ├── parsers/         # Ecosystem parsers
+│   ├── scanners/        # NVD enrichment
+│   ├── account.py       # Authentication
+│   ├── history.py       # Scan history
+│   └── tests/           # pytest tests
+├── frontend/            # React web UI
+│   ├── src/
+│   │   ├── components/
+│   │   └── api/
+│   └── package.json
+├── vscode-vulnchecker/   # VS Code extension
+│   ├── src/
+│   └── package.json
+└── requirements.txt
 ```
-
-### SARIF (GitHub Code Scanning)
-```bash
-cipher --path . --export sarif -o results.sarif
-```
-
-### CSV Report
-```bash
-cipher --path . --export csv -o report.csv
-```
-
-### HTML Report
-```bash
-cipher --path . --export html -o report.html
-```
-
-## 🛡️ Security Best Practices
-
-### Regular Scanning
-- **Weekly Scans**: Schedule automated scans in CI/CD
-- **Pre-commit Hooks**: Catch vulnerabilities before commit
-- **PR Integration**: Block merges with new vulnerabilities
-
-### Dependency Management
-- **Lock Files**: Always use lock files for exact versions
-- **Automated Updates**: Use Dependabot or Renovate with Cipher
-- **Review Updates**: Test major version updates carefully
-
-### Incident Response
-- **Prioritize Critical**: Address critical vulnerabilities immediately
-- **Track Aging**: Monitor how long vulnerabilities remain unpatched
-- **Document Fixes**: Keep records of security remediation
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Setup
-
-```bash
-# Clone repository
-git clone https://github.com/zoulevanz23/cipher.git
-cd cipher
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Install frontend dependencies
-cd frontend
-npm install
-
-# Run development servers
-# Terminal 1: Backend
-cd ..
-python -m uvicorn vulnchecker.main:app --reload
-
-# Terminal 2: Frontend
-cd frontend
-npm run dev
-```
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **OSV.dev** - Open Source Vulnerabilities database
-- **NVD** - National Vulnerability Database
-- **GitHub Advisory Database** - Security advisories
-- **FastAPI** - Modern Python web framework
-- **React** - JavaScript library for building UIs
-- **Vite** - Next generation frontend tooling
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/zoulevanz23/cipher/issues)
-- **Documentation**: [Wiki](https://github.com/zoulevanz23/cipher/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/zoulevanz23/cipher/discussions)
-
-## 🔗 Links
-
-- **Repository**: [https://github.com/zoulevanz23/cipher](https://github.com/zoulevanz23/cipher)
-- **PyPI**: [https://pypi.org/project/cipher/](https://pypi.org/project/cipher/)
-- **VS Code Marketplace**: [Link to extension]
-- **Documentation**: [Full Documentation](https://cipher.dev/docs)
 
 ---
 
-Made with 🔒 by [zoulevanz23](https://github.com/zoulevanz23)
+## License
+
+MIT
+
+---
+
+## Repository
+
+https://github.com/zoulevanz23/cipher
