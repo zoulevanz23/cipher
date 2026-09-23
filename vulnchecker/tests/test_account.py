@@ -34,7 +34,7 @@ def test_hash_and_verify_password():
     assert verify_password("wrong", hashed) == False
 
 def test_create_and_get_user():
-    email = "test@example.com"
+    email = _unique_email("test")
     password = "testpassword123"
     user_id = create_user(email, password)
     assert user_id > 0
@@ -55,7 +55,7 @@ def test_create_anonymous():
     assert user["is_anonymous"] == 1
 
 def test_token_generation_and_verification():
-    user_id = create_user("token@example.com", "password123")
+    user_id = create_user(_unique_email("token"), "password123")
     token = generate_token(user_id)
     assert token is not None
     
@@ -69,7 +69,7 @@ def test_credits_system():
     assert remaining == 4  # Started with 5, consumed 1
 
 def test_change_password():
-    user_id = create_user("changepass@example.com", "oldpassword123")
+    user_id = create_user(_unique_email("changepass"), "oldpassword123")
     ok, msg = change_password(user_id, "oldpassword123", "newpassword123")
     assert ok == True
     
@@ -78,9 +78,57 @@ def test_change_password():
     assert verify_password("newpassword123", user["password_hash"]) == True
 
 def test_delete_user():
-    user_id = create_user("delete@example.com", "password123")
+    user_id = create_user(_unique_email("delete"), "password123")
     result = delete_user(user_id)
     assert result == True
     
     user = get_user(user_id)
     assert user is None
+
+def _unique_email(prefix: str) -> str:
+    import uuid
+    return f"{prefix}_{uuid.uuid4().hex[:8]}@example.com"
+
+def test_create_user_duplicate_race_raises():
+    """Second concurrent-style insert must raise ValueError (409 net)."""
+    email = _unique_email("dup")
+    first = create_user(email, "validpassword123")
+    assert first > 0
+    with pytest.raises(ValueError, match="already registered"):
+        create_user(email, "validpassword123")
+
+def test_password_blocklist_parity():
+    """Must stay byte-identical to frontend validation.ts messages."""
+    # NOTE: length is checked before the blocklist, so "letmein"
+    # (7 chars) reports the length error instead.
+    for common in ["password", "PASSWORD", "Password", "12345678", "qwerty123", "QWERTY123"]:
+        assert validate_password(common) == "Password too common"
+    assert validate_password("letmein") == "Password must be at least 8 characters"
+    assert validate_password("1234567") == "Password must be at least 8 characters"
+    assert validate_password("x" * 129) == "Password too long"
+    assert validate_password("exactly8") is None
+    assert validate_password("x" * 128) is None
+
+def test_email_length_bounds():
+    ok_254 = "a" * 242 + "@example.com"  # exactly 254 chars
+    assert len(ok_254) == 254
+    assert validate_email(ok_254) is True
+    assert validate_email("a" * 243 + "@example.com") is False  # 255 chars
+
+def test_delete_user_cascades_scans():
+    import vulnchecker.account as acc
+    email = _unique_email("cascade")
+    user_id = create_user(email, "validpassword123")
+    conn = acc._get_conn()
+    conn.execute(
+        "INSERT INTO scans (timestamp, user_id, project_name) VALUES (?, ?, ?)",
+        ("2026-01-01T00:00:00+00:00", user_id, "demo"),
+    )
+    conn.commit()
+    conn.close()
+    assert delete_user(user_id) is True
+    conn = acc._get_conn()
+    leftover = conn.execute("SELECT * FROM scans WHERE user_id = ?", (user_id,)).fetchall()
+    conn.close()
+    assert leftover == []
+    assert get_user(user_id) is None
