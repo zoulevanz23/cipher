@@ -20,7 +20,7 @@ from .health import compute_health_score, health_grade
 from .sbom import generate_spdx, generate_cyclonedx
 from .export import generate_sarif, generate_csv
 from .config import should_ignore
-from .history import save_scan, get_history, get_scan as get_scan_db
+from .history import save_scan, get_history, get_scan as get_scan_db, get_scan_stats
 from .account import (
     create_user,
     create_anonymous,
@@ -36,6 +36,9 @@ from .account import (
     check_rate_limit,
     change_password,
     delete_user,
+    get_or_create_oauth_user,
+    google_client_id,
+    verify_google_id_token,
 )
 from .news import fetch_news
 
@@ -98,6 +101,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
+
 class ReportRequest(BaseModel):
     results: list
     summary: dict
@@ -155,7 +162,7 @@ async def health():
 async def register(req: RegisterRequest, request: Request):
     ip = request.client.host if request.client else "unknown"
     if not check_rate_limit(f"reg:{ip}", 5, 3600):
-        raise HTTPException(status_code=429, detail="Too many registration attempts. Try again later.")
+        raise HTTPException(status_code=429, detail="Too many registration attempts. Try again later.", headers={"Retry-After": "3600"})
     email = req.email.strip().lower()
     if not validate_email(email):
         raise HTTPException(status_code=400, detail="Invalid email")
@@ -164,7 +171,10 @@ async def register(req: RegisterRequest, request: Request):
         raise HTTPException(status_code=400, detail=pw_err)
     if get_user_by_email(email):
         raise HTTPException(status_code=409, detail="Email already registered")
-    user_id = create_user(email, req.password)
+    try:
+        user_id = create_user(email, req.password)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     token = generate_token(user_id)
     return {"user_id": user_id, "token": token, "email": email}
 
@@ -174,7 +184,7 @@ async def login(req: LoginRequest, request: Request):
     ip = request.client.host if request.client else "unknown"
     email = req.email.strip().lower()
     if not check_rate_limit(f"login:{ip}:{email}", 5, 900):
-        raise HTTPException(status_code=429, detail="Too many login attempts. Try again in 15 minutes.")
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again in 15 minutes.", headers={"Retry-After": "900"})
     token = generate_login_token(email, req.password)
     if not token:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -186,22 +196,50 @@ async def login(req: LoginRequest, request: Request):
 async def anonymous_login(request: Request):
     ip = request.client.host if request.client else "unknown"
     if not check_rate_limit(f"anon:{ip}", 10, 3600):
-        raise HTTPException(status_code=429, detail="Too many anonymous accounts. Try again later.")
+        raise HTTPException(status_code=429, detail="Too many anonymous accounts. Try again later.", headers={"Retry-After": "3600"})
     user_id = create_anonymous()
     token = generate_token(user_id)
     credits = get_credits_status(user_id)
     return {"token": token, "user_id": user_id, "is_anonymous": True, "is_new": True, **credits}
 
 
+@app.post("/api/auth/google")
+async def google_login(req: GoogleAuthRequest, request: Request):
+    """Google Identity Services sign-in. Verifies the ID token, then
+    finds-or-creates the account (first Google sign-in auto-creates it)."""
+    ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"google:{ip}", 10, 3600):
+        raise HTTPException(status_code=429, detail="Too many Google sign-in attempts. Try again later.", headers={"Retry-After": "3600"})
+    client_id = google_client_id()
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Google sign-in is not configured on this server.")
+    info = verify_google_id_token(req.id_token, client_id)
+    if not info:
+        raise HTTPException(status_code=401, detail="Invalid Google credential.")
+    email = (info.get("email") or "").strip().lower()
+    if not info.get("email_verified") or not validate_email(email):
+        raise HTTPException(status_code=401, detail="Google account email is not verified.")
+    sub = info.get("sub") or ""
+    user_id, is_new = get_or_create_oauth_user(email, "google", sub)
+    token = generate_token(user_id)
+    return {"token": token, "user_id": user_id, "email": email, "is_anonymous": False, "is_new": is_new}
+
+
 @app.get("/api/auth/me")
 async def me(user: Optional[dict] = Depends(get_current_user)):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    stats = get_scan_stats(user["id"])
     return {
         "user_id": user["id"],
         "email": user["email"],
         "is_anonymous": bool(user["is_anonymous"]),
+        "created_at": user.get("created_at"),
         "credits": get_credits_status(user["id"]),
+        "stats": {
+            "scan_count": stats.get("count", 0) or 0,
+            "total_vulnerabilities": stats.get("total_vulns", 0) or 0,
+        },
     }
 
 
@@ -638,6 +676,18 @@ async def save_scan_endpoint(req: SaveScanRequest, user: Optional[dict] = Depend
 async def scan_history(limit: int = 20, user: Optional[dict] = Depends(get_current_user)):
     user_id = user["id"] if user else None
     return get_history(user_id, limit)
+
+
+@app.get("/api/scan/history/{scan_id}")
+async def scan_history_entry(scan_id: int, user: Optional[dict] = Depends(get_current_user)):
+    """Fetch one saved scan — always scoped to the caller, so users can
+    only ever reopen their own history entries."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    entry = get_scan_db(scan_id, user["id"])
+    if not entry:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return entry
 
 
 @app.get("/api/news")
