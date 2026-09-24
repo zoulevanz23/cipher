@@ -1,4 +1,4 @@
-# VulnChecker
+# Cipher
 
 A dependency vulnerability scanner that checks package manifests against the OSV API to identify known security vulnerabilities.
 
@@ -6,7 +6,7 @@ A dependency vulnerability scanner that checks package manifests against the OSV
 
 ## Project Overview
 
-VulnChecker scans dependency files across multiple package ecosystems (npm, PyPI, Go, Maven, NuGet, RubyGems, Cargo) and reports known security vulnerabilities by querying the Open Source Vulnerabilities (OSV) database. The project provides three interfaces: a CLI tool for local scanning, a FastAPI backend with a React web UI, and a VS Code extension for in-editor diagnostics.
+Cipher scans dependency files across multiple package ecosystems (npm, PyPI, Go, Maven, NuGet, RubyGems, Cargo) and reports known security vulnerabilities by querying the Open Source Vulnerabilities (OSV) database. The project provides three interfaces: a CLI tool for local scanning, a FastAPI backend with a React web UI, and a VS Code extension for in-editor diagnostics.
 
 The scanner extracts package names and versions from manifest and lock files, queries the OSV API for vulnerability data, and enriches results with additional context from the NVD database and Exploit Prediction Scoring System (EPSS). It supports multiple output formats including SARIF for GitHub code scanning integration, SPDX and CycloneDX for SBOM generation, and CSV/HTML for reporting.
 
@@ -151,7 +151,7 @@ SQLite database with two tables:
 
 ```bash
 git clone https://github.com/zoulevanz23/cipher.git
-cd vuln-checker
+cd cipher
 pip install -r requirements.txt
 ```
 
@@ -177,56 +177,56 @@ Access the web UI at `http://localhost:5173`
 
 ```bash
 # Scan current directory (auto-detects ecosystem)
-vulnchecker --path .
+cipher --path .
 
 # Scan with lock file for exact versions
-vulnchecker --path . --lock-file
+cipher --path . --lock-file
 
 # Filter by minimum severity
-vulnchecker --path . --min-severity high
+cipher --path . --min-severity high
 ```
 
 ### Output Formats
 
 ```bash
 # Table (default)
-vulnchecker --path . --format table
+cipher --path . --format table
 
 # JSON
-vulnchecker --path . --format json -o results.json
+cipher --path . --format json -o results.json
 
 # Summary
-vulnchecker --path . --format summary
+cipher --path . --format summary
 
 # SBOM formats
-vulnchecker --path . --format spdx -o sbom.json
-vulnchecker --path . --format cyclonedx -o sbom.json
+cipher --path . --format spdx -o sbom.json
+cipher --path . --format cyclonedx -o sbom.json
 
 # SARIF for GitHub
-vulnchecker --path . --format sarif -o results.sarif
+cipher --path . --format sarif -o results.sarif
 ```
 
 ### CI/CD Integration
 
 ```bash
 # Fail build if high or critical vulnerabilities found
-vulnchecker --path . --fail-on high
+cipher --path . --fail-on high
 
 # Fail on any vulnerability
-vulnchecker --path . --fail-on any
+cipher --path . --fail-on any
 ```
 
 ### Ecosystem Specification
 
 ```bash
-vulnchecker --path /path/to/project --ecosystem pip
-vulnchecker --path /path/to/project --ecosystem go
-vulnchecker --path /path/to/project --ecosystem cargo
+cipher --path /path/to/project --ecosystem pip
+cipher --path /path/to/project --ecosystem go
+cipher --path /path/to/project --ecosystem cargo
 ```
 
 ### Configuration
 
-Create a `.vulncheckerrc` file in your project root:
+Create a `.cipherrc` file in your project root:
 
 ```json
 {
@@ -273,10 +273,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install VulnChecker
+      - name: Install Cipher
         run: pip install -r requirements.txt
       - name: Scan dependencies
-        run: python -m vulnchecker --path . --format json --output results.json
+        run: python -m cipher --path . --format json --output results.json
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v2
         with:
@@ -296,7 +296,7 @@ pytest vulnchecker/tests/
 ### Project Structure
 
 ```
-vuln-checker/
+cipher/
 ├── vulnchecker/          # Python backend
 │   ├── main.py          # FastAPI server
 │   ├── cli.py           # CLI interface
