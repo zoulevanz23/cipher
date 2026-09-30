@@ -61,7 +61,7 @@ export class AccountViewProvider implements vscode.WebviewViewProvider {
   ` : ''}
   <div class="section">
     <div class="label">Credits</div>
-    <div class="value">${credits?.credits || 0} / ${credits?.limit === Infinity ? "Unlimited" : credits?.limit || 5}</div>
+    <div class="value">${credits?.credits || 0} / ${credits?.limit === Infinity ? "Unlimited" : credits?.limit || 23}</div>
   </div>
   ${state?.token ? `
     <button onclick="logout()">Sign Out</button>

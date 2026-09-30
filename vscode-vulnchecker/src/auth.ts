@@ -4,7 +4,7 @@ const SECRET_KEY = "vulnchecker_token";
 const USER_ID_KEY = "vulnchecker_user_id";
 const CREDITS_KEY = "vulnchecker_credits";
 const IS_ANON_KEY = "vulnchecker_is_anonymous";
-const CREDITS_LIMIT = 5;
+const CREDITS_LIMIT = 23;
 
 export interface AuthState {
   token: string | undefined;

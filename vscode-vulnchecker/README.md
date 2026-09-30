@@ -35,7 +35,7 @@ A VSCode extension for checking dependency vulnerabilities in your projects.
 
 ### Anonymous Mode
 
-If you don't want to create an account, you can use anonymous mode with 5 scans per day.
+If you don't want to create an account, you can use anonymous mode with 23 scans per day.
 
 ## Configuration
 

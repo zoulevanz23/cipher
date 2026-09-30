@@ -105,7 +105,7 @@ export function activate(context: vscode.ExtensionContext) {
   function updateStatusBar() {
     if (authState.isAnonymous) {
       const c = authState.creditsRemaining;
-      statusBar.text = c > 0 ? `$(shield) VulnChecker (${c}/5)` : `$(shield) VulnChecker ✗`;
+      statusBar.text = c > 0 ? `$(shield) VulnChecker (${c}/23)` : `$(shield) VulnChecker ✗`;
       statusBar.tooltip = c > 0 ? `${c} scans left — create account for unlimited` : "No scans left — create account";
       statusBar.backgroundColor = c <= 0 ? new vscode.ThemeColor("statusBarItem.warningBackground") : undefined;
     } else { statusBar.text = `$(shield) VulnChecker`; statusBar.tooltip = `Signed in as ${authState.email} — unlimited`; statusBar.backgroundColor = undefined; }
