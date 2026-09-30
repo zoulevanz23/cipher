@@ -4,10 +4,7 @@ import { fetchExport, saveScan, authAnonymous, authMe, clearToken, getToken, get
 import { Navbar } from "./components/Navbar";
 import { LandingPage } from "./components/landing/LandingPage";
 import { ScanToolSection } from "./components/landing/ScanToolSection";
-import { StatsCards } from "./components/StatsCards";
-import { ResultsDashboard } from "./components/ResultsDashboard";
-import { SeverityChart } from "./components/SeverityChart";
-import { CopyButton } from "./components/CopyButton";
+import { ScanResults } from "./components/ScanResults";
 import { HistoryDashboard } from "./components/HistoryDashboard";
 import { NewsFeed } from "./components/NewsFeed";
 import { Features } from "./components/Features";
@@ -23,6 +20,7 @@ type View = "landing" | "scanner" | "results" | "history" | "news" | "features" 
 
 export default function App() {
   const [scanResult, setScanResult] = useState<ScanResponse | null>(null);
+  const [lastManifest, setLastManifest] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("landing");
@@ -34,6 +32,7 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const [scanLog, setScanLog] = useState<string[]>([]);
+  void exportLoading;
 
   const go = (v: View) => setView(v);
   /* Footer anchor links work from any view: land first, then scroll. */
@@ -67,6 +66,23 @@ export default function App() {
       }
     }
   };
+
+  const syncCreditsFromScan = (res: ScanResponse | null) => {
+    if (res && typeof (res as any).anonymous_credits_remaining === "number" && auth?.isAnonymous) {
+      setAuth((prev) => (prev ? { ...prev, credits: (res as any).anonymous_credits_remaining } : prev));
+    } else if (res) {
+      // ensures realtime even for registered (no credit change) + anonymous fallback
+      refreshAuth();
+    }
+  };
+
+  // realtime: keep Navbar 23-count live (poll every 30s + on focus)
+  useEffect(() => {
+    const id = setInterval(() => { if (auth?.isAnonymous) refreshAuth(false); }, 30000);
+    const onFocus = () => { if (auth?.isAnonymous) refreshAuth(false); };
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(id); window.removeEventListener("focus", onFocus); };
+  }, [auth?.isAnonymous]);
   useEffect(() => { const init = async () => { if (!getToken()) { try { await authAnonymous(); } catch {} } refreshAuth(); }; init(); }, []);
   useEffect(() => {
     if (!scanResult) return;
@@ -139,7 +155,11 @@ export default function App() {
     if (view === "scanner") return (
       <div key="scanner">
         <ScanToolSection
-          onScanResult={(res) => { setScanResult(res); if (res) go("results"); }}
+          onScanResult={(res, pkgJson) => {
+            setScanResult(res);
+            if (pkgJson) setLastManifest(pkgJson);
+            if (res) { go("results"); syncCreditsFromScan(res); }
+          }}
           onLoading={setLoading}
           onError={setError}
           onProgress={handleProgress}
@@ -164,60 +184,18 @@ export default function App() {
       );
       return (
         <div key="results">
-          <div className="verdict-band verdict-glow">
-            <div className={`v-icon ${scanResult.summary.total_vulnerabilities === 0 ? "pass" : "crit"}`}>
-              {scanResult.summary.total_vulnerabilities === 0 ? "✓" : "!"}
-            </div>
-            <div className="v-body">
-              <div className="v-head">{scanResult.summary.total_vulnerabilities === 0 ? "No vulnerabilities found" : "Vulnerabilities detected"}</div>
-              <div className="v-meta">
-                {scanResult.summary.total_packages} packages · {scanResult.summary.vulnerable_packages} vulnerable · {scanResult.summary.total_vulnerabilities} findings · {new Date().toLocaleDateString()}
-              </div>
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-header">Summary</div>
-            <StatsCards summary={scanResult.summary} />
-          </div>
-          <div className="panel">
-            <div className="panel-header">Severity Breakdown</div>
-            <SeverityChart breakdown={scanResult.summary.severity_breakdown} />
-          </div>
-          {scanResult.fixes.length > 0 && (
-            <div className="panel">
-              <div className="panel-header">Fixes · {scanResult.fixes.length} available</div>
-              <div className="space-y-2 font-mono text-xs">
-                {scanResult.fixes.map((f) => {
-                  const rc = f.risk === "safe" ? "var(--pass)" : f.risk === "minor" ? "var(--warn)" : "var(--crit)";
-                  return (
-                    <div key={f.package_name} className="flex items-center gap-2" style={{ flexWrap: "wrap" }}>
-                      <span style={{ color: "var(--ink)", fontWeight: 600 }}>{f.package_name}</span>
-                      <span style={{ color: "var(--muted2)" }}>{f.current_version} →</span>
-                      <span style={{ color: "var(--pass)", fontWeight: 600 }}>{f.recommended_version}</span>
-                      {f.risk && (
-                        <span style={{ fontSize: "10px", fontWeight: 600, color: rc, border: `1px solid ${rc}`, opacity: 0.9, borderRadius: "4px", padding: "1px 6px", background: "transparent" }}>
-                          {(f.risk_label || f.risk).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-3"><CopyButton content={scanResult.fixes.map((f) => `npm install ${f.package_name}@${f.recommended_version}`).join("\n")} /></div>
-            </div>
-          )}
-          <div className="panel">
-            <div className="panel-header">Export</div>
-            <div className="flex gap-2">
-              {["spdx","cyclonedx","sarif","csv"].map((fmt) => (
-                <button key={fmt} onClick={() => handleExport(fmt)} disabled={exportLoading} className="btn btn-sm">{fmt.toUpperCase()}</button>
-              ))}
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-header">Results</div>
-            <ResultsDashboard results={scanResult.results} onSelectResult={setSelectedResult} />
-          </div>
+          <ScanResults
+            scan={scanResult}
+            packageJson={lastManifest}
+            onScanNew={() => go("scanner")}
+            onExport={(fmt: string) => handleExport(fmt)}
+            onSelectResult={setSelectedResult}
+            onNewScan={(res, pkgJson) => {
+              setScanResult(res);
+              if (pkgJson) setLastManifest(pkgJson);
+              syncCreditsFromScan(res);
+            }}
+          />
         </div>
       );
     }
