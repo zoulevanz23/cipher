@@ -235,6 +235,19 @@ export async function saveScan(
   return res.json();
 }
 
+export async function simulateWhatIf(payload: { package_json?: string; upgrades: Array<{ name: string; version: string }>; ecosystem?: string; base_scan?: any }): Promise<any> {
+  const res = await fetch(`${BASE}/simulate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Simulate failed" }));
+    throw new Error(err.detail || "Simulate failed");
+  }
+  return res.json();
+}
+
 export async function healthCheck(): Promise<{ status: string }> {
   const res = await fetch(`${BASE}/health`);
   return res.json();
