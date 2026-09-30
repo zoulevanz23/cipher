@@ -37,7 +37,7 @@ def _load_jwt_secret() -> str:
 JWT_SECRET = _load_jwt_secret()
 JWT_ALGORITHM = "HS256"
 TOKEN_EXPIRY_HOURS = 24
-CREDITS_LIMIT = 5
+CREDITS_LIMIT = 23
 CREDITS_RESET_HOURS = 24
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -59,13 +59,74 @@ def check_rate_limit(key: str, limit: int, window_sec: int) -> bool:
 def validate_email(email: str) -> bool:
     return bool(EMAIL_RE.match(email)) and len(email) <= 254
 
-def validate_password(password: str) -> str | None:
+PEPPER = os.getenv("CIPHER_PEPPER", "")
+
+# expanded blocklist ~50 most common + variants, case-insensitive
+_COMMON_PASSWORDS = {
+    "password", "12345678", "qwerty123", "letmein", "123456789", "1234567890",
+    "1234567", "123123", "qwerty", "abc123", "password1", "123456", "12345",
+    "admin", "welcome", "monkey", "dragon", "master", "sunshine", "princess",
+    "football", "iloveyou", "trustno1", "000000", "111111", "qwertyuiop",
+    "123qwe", "1qaz2wsx", "password123", "admin123", "letmein123", "welcome123",
+    "p@ssw0rd", "passw0rd", "qwerty123456", "1password", "654321", "superman",
+    "jesus", "ninja", "mustang", "starwars", "654321", "qazwsx", "michael",
+    "shadow", "123123123", "baseball", "whatever", "photon123",
+}
+
+def _has_repeated_chars(password: str) -> bool:
+    return bool(re.search(r"(.)\1\1", password))
+
+def _has_sequential_chars(password: str) -> bool:
+    low = password.lower()
+    # check 4-char ascending/descending in alphabet and numbers
+    seq_alpha = "abcdefghijklmnopqrstuvwxyz"
+    seq_num = "0123456789"
+    seq_key = "qwertyuiopasdfghjklzxcvbnm"
+    for i in range(len(low) - 3):
+        chunk = low[i:i+4]
+        if chunk in seq_alpha or chunk in seq_alpha[::-1]:
+            return True
+        if chunk in seq_num or chunk in seq_num[::-1]:
+            return True
+        if chunk in seq_key:
+            return True
+    return False
+
+def validate_password(password: str, email: str | None = None) -> str | None:
     if len(password) < 8:
         return "Password must be at least 8 characters"
     if len(password) > 128:
         return "Password too long"
-    if password.lower() in {"password", "12345678", "qwerty123", "letmein"}:
+    low = password.lower()
+    if low in _COMMON_PASSWORDS:
         return "Password too common"
+    # check common as substring for longer variants like P@ssw0rd123!
+    for common in _COMMON_PASSWORDS:
+        if len(common) >= 6 and common in low:
+            # allow if common is not majority of password
+            if len(common) / len(password) > 0.6:
+                return "Password too common"
+    # email local-part must not appear
+    if email:
+        local = email.split("@")[0].lower()
+        if len(local) >= 3 and local in low:
+            return "Password must not contain your email"
+    if _has_repeated_chars(password):
+        return "Password must not contain 3 repeated characters"
+    if _has_sequential_chars(password):
+        return "Password too weak — avoid sequences like abcd or 1234"
+    # complexity: 3 of 4 categories
+    cats = 0
+    if re.search(r"[A-Z]", password):
+        cats += 1
+    if re.search(r"[a-z]", password):
+        cats += 1
+    if re.search(r"[0-9]", password):
+        cats += 1
+    if re.search(r"[^A-Za-z0-9]", password):
+        cats += 1
+    if cats < 3:
+        return "Password must include 3 of: uppercase, lowercase, number, symbol"
     return None
 
 
@@ -121,12 +182,22 @@ def _init_tables() -> None:
 _init_tables()
 
 
+def _with_pepper(password: str) -> bytes:
+    # pepper is optional env, not stored — adds defense if DB leaks
+    return (password + PEPPER).encode()
+
+# precomputed dummy hash for constant-time fallback when user not found
+_DUMMY_HASH = bcrypt.hashpw(b"dummy-password-12!@#", bcrypt.gensalt()).decode()
+
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(_with_pepper(password), bcrypt.gensalt(rounds=12)).decode()
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode(), password_hash.encode())
+    try:
+        return bcrypt.checkpw(_with_pepper(password), password_hash.encode())
+    except (ValueError, TypeError):
+        return False
 
 
 def create_user(email: str, password: str) -> int:
@@ -238,6 +309,8 @@ def generate_token(user_id: int) -> str:
         "user_id": user_id,
         "exp": datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRY_HOURS),
         "iat": datetime.now(timezone.utc),
+        "jti": secrets.token_hex(8),
+        "iss": "cipher",
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -293,7 +366,14 @@ def check_and_consume_credits(user_id: int) -> tuple[bool, int]:
 
 def generate_login_token(email: str, password: str) -> Optional[str]:
     user = get_user_by_email(email)
+    # constant-time: always run a bcrypt verify even if user missing
+    # to avoid timing oracle on email enumeration
     if not user:
+        # burn similar time
+        try:
+            verify_password(password, _DUMMY_HASH)
+        except Exception:
+            pass
         return None
     try:
         # OAuth-created rows carry a non-bcrypt placeholder hash, which

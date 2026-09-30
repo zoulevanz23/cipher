@@ -82,3 +82,83 @@ def get_scan_stats(user_id: Optional[int]) -> dict:
         ).fetchone()
     conn.close()
     return dict(row) if row else {"count": 0, "total_vulns": 0}
+
+
+def _ensure_ignores_table(conn: sqlite3.Connection):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ignores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            vuln_id TEXT NOT NULL,
+            until TEXT,
+            reason TEXT,
+            created TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+
+
+def add_ignore(user_id: Optional[int], vuln_id: str, until: str, reason: str) -> int:
+    conn = _get_conn()
+    _ensure_ignores_table(conn)
+    cur = conn.execute(
+        "INSERT INTO ignores (user_id, vuln_id, until, reason, created) VALUES (?, ?, ?, ?, ?)",
+        (user_id, vuln_id, until, reason, datetime.now(UTC).isoformat()),
+    )
+    conn.commit()
+    rid = cur.lastrowid
+    conn.close()
+    return rid
+
+
+def get_ignores(user_id: Optional[int]) -> list[dict]:
+    conn = _get_conn()
+    _ensure_ignores_table(conn)
+    if user_id:
+        rows = conn.execute("SELECT * FROM ignores WHERE user_id = ? ORDER BY id DESC", (user_id,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM ignores WHERE user_id IS NULL ORDER BY id DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def _ensure_simulations_table(conn: sqlite3.Connection):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS simulations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            base_manifest TEXT,
+            upgrades_json TEXT,
+            result_json TEXT,
+            created TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+
+
+def save_simulation(user_id: Optional[int], base_manifest: str, upgrades: list[dict], result: dict) -> int:
+    conn = _get_conn()
+    _ensure_simulations_table(conn)
+    cur = conn.execute(
+        "INSERT INTO simulations (user_id, base_manifest, upgrades_json, result_json, created) VALUES (?, ?, ?, ?, ?)",
+        (user_id, base_manifest, json.dumps(upgrades), json.dumps(result), datetime.now(UTC).isoformat()),
+    )
+    conn.commit()
+    rid = cur.lastrowid
+    conn.close()
+    return rid
+
+
+def get_simulations(user_id: Optional[int], limit: int = 20) -> list[dict]:
+    conn = _get_conn()
+    _ensure_simulations_table(conn)
+    if user_id:
+        rows = conn.execute("SELECT * FROM simulations WHERE user_id = ? ORDER BY id DESC LIMIT ?", (user_id, limit)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM simulations WHERE user_id IS NULL ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

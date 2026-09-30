@@ -46,10 +46,10 @@ def _max_version(versions: list[str]) -> str | None:
     return best
 
 
-async def _query_npm_latest(client: httpx.AsyncClient, sem: asyncio.Semaphore, name: str) -> str | None:
+async def _query_npm_latest(client: httpx.AsyncClient, sem: asyncio.Semaphore, name: str, headers: dict | None = None) -> str | None:
     try:
         async with sem:
-            resp = await client.get(f"{NPM_REGISTRY}/{name}", timeout=15)
+            resp = await client.get(f"{NPM_REGISTRY}/{name}", timeout=15, headers=headers or {})
         resp.raise_for_status()
         data = resp.json()
         return data.get("dist-tags", {}).get("latest")
@@ -57,10 +57,10 @@ async def _query_npm_latest(client: httpx.AsyncClient, sem: asyncio.Semaphore, n
         return None
 
 
-async def _query_pypi_latest(client: httpx.AsyncClient, sem: asyncio.Semaphore, name: str) -> str | None:
+async def _query_pypi_latest(client: httpx.AsyncClient, sem: asyncio.Semaphore, name: str, headers: dict | None = None) -> str | None:
     try:
         async with sem:
-            resp = await client.get(f"{PYPI_REGISTRY}/{name}/json", timeout=15)
+            resp = await client.get(f"{PYPI_REGISTRY}/{name}/json", timeout=15, headers=headers or {})
         resp.raise_for_status()
         data = resp.json()
         return data.get("info", {}).get("version")
@@ -74,25 +74,31 @@ _REGISTRY_QUERIERS = {
 }
 
 
-async def _query_latest_version(client: httpx.AsyncClient, sem: asyncio.Semaphore, ecosystem: str, name: str) -> str | None:
+async def _query_latest_version(client: httpx.AsyncClient, sem: asyncio.Semaphore, ecosystem: str, name: str, headers: dict | None = None) -> str | None:
     querier = _REGISTRY_QUERIERS.get(ecosystem)
     if querier:
-        return await querier(client, sem, name)
+        return await querier(client, sem, name, headers)
     return None
 
 
-async def compute_fixes(results: list[ScanResult]) -> list[dict]:
+async def compute_fixes(results: list[ScanResult], registry_auth: dict | None = None) -> list[dict]:
     fixes = []
     vulnerable_packages = [r for r in results if r.vulnerabilities]
     if not vulnerable_packages:
         return fixes
 
+    headers = {}
+    if registry_auth and registry_auth.get("npmToken"):
+        headers["Authorization"] = f"Bearer {registry_auth['npmToken']}"
     sem = asyncio.Semaphore(MAX_CONCURRENT)
     async with httpx.AsyncClient() as client:
         tasks = []
         for r in vulnerable_packages:
             eco = r.package.ecosystem if hasattr(r.package, "ecosystem") and r.package.ecosystem else "npm"
-            tasks.append(_query_latest_version(client, sem, eco, r.package.name))
+            h = headers
+            if registry_auth and eco == "pypi" and registry_auth.get("pypiToken"):
+                h = {"Authorization": f"Bearer {registry_auth['pypiToken']}"}
+            tasks.append(_query_latest_version(client, sem, eco, r.package.name, h))
 
         latest_versions = await asyncio.gather(*tasks)
 

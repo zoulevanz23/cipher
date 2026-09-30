@@ -186,7 +186,13 @@ async def _query_batch(client: httpx.AsyncClient, packages: list[Package]) -> li
                 if res is None:
                     out.append(None)
                 else:
-                    out.append(res.get("vulns", []))
+                    vulns = res.get("vulns", [])
+                    # OSV batch returns only id+modified (summary view) — treat as incomplete
+                    # and fall back to per-package query which returns full details.
+                    if vulns and not any("summary" in v or "aliases" in v or "database_specific" in v for v in vulns):
+                        out.append(None)
+                    else:
+                        out.append(vulns)
             return out
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429 and attempt < MAX_RETRIES - 1:

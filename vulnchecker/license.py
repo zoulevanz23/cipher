@@ -11,10 +11,10 @@ PYPI_REGISTRY = "https://pypi.org/pypi"
 UNMAINTAINED_YEARS = 2
 
 
-async def _query_npm_info(client: httpx.AsyncClient, sem: asyncio.Semaphore, name: str) -> tuple[str, str]:
+async def _query_npm_info(client: httpx.AsyncClient, sem: asyncio.Semaphore, name: str, headers: dict | None = None) -> tuple[str, str]:
     try:
         async with sem:
-            resp = await client.get(f"{NPM_REGISTRY}/{name}", timeout=15)
+            resp = await client.get(f"{NPM_REGISTRY}/{name}", timeout=15, headers=headers or {})
         resp.raise_for_status()
         data = resp.json()
         license_val = data.get("license", "") or ""
@@ -30,10 +30,10 @@ async def _query_npm_info(client: httpx.AsyncClient, sem: asyncio.Semaphore, nam
         return "", ""
 
 
-async def _query_pypi_info(client: httpx.AsyncClient, sem: asyncio.Semaphore, name: str) -> tuple[str, str]:
+async def _query_pypi_info(client: httpx.AsyncClient, sem: asyncio.Semaphore, name: str, headers: dict | None = None) -> tuple[str, str]:
     try:
         async with sem:
-            resp = await client.get(f"{PYPI_REGISTRY}/{name}/json", timeout=15)
+            resp = await client.get(f"{PYPI_REGISTRY}/{name}/json", timeout=15, headers=headers or {})
         resp.raise_for_status()
         data = resp.json()
         info = data.get("info", {})
@@ -50,21 +50,32 @@ _REGISTRY_QUERIERS = {
 }
 
 
-async def _query_info(client: httpx.AsyncClient, sem: asyncio.Semaphore, ecosystem: str, name: str) -> tuple[str, str]:
+async def _query_info(client: httpx.AsyncClient, sem: asyncio.Semaphore, ecosystem: str, name: str, headers: dict | None = None) -> tuple[str, str]:
     querier = _REGISTRY_QUERIERS.get(ecosystem)
     if querier:
-        return await querier(client, sem, name)
+        return await querier(client, sem, name, headers)
     return "", ""
 
 
-async def fetch_package_info(packages: list[Package]) -> dict[str, dict]:
+async def fetch_package_info(packages: list[Package], registry_auth: dict | None = None) -> dict[str, dict]:
+    # build headers from registry_auth: {npmToken, pypiToken, headers}
+    headers = {}
+    if registry_auth:
+        if registry_auth.get("npmToken"):
+            headers["Authorization"] = f"Bearer {registry_auth['npmToken']}"
+        elif registry_auth.get("token"):
+            headers["Authorization"] = f"Bearer {registry_auth['token']}"
     results: dict[str, dict] = {}
     sem = asyncio.Semaphore(MAX_CONCURRENT)
     async with httpx.AsyncClient() as client:
         tasks = []
         for pkg in packages:
             eco = pkg.ecosystem if pkg.ecosystem else "npm"
-            tasks.append(_query_info(client, sem, eco, pkg.name))
+            # per-ecosystem token
+            h = headers
+            if registry_auth and eco == "pypi" and registry_auth.get("pypiToken"):
+                h = {"Authorization": f"Bearer {registry_auth['pypiToken']}"}
+            tasks.append(_query_info(client, sem, eco, pkg.name, h))
         infos = await asyncio.gather(*tasks)
     for pkg, (lic, last_mod) in zip(packages, infos):
         results[pkg.name] = {"license": lic, "last_updated": last_mod}

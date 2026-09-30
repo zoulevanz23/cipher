@@ -24,8 +24,10 @@ def test_validate_email():
 
 def test_validate_password():
     assert validate_password("short") == "Password must be at least 8 characters"
+    assert validate_password("Ab1!a") == "Password must be at least 8 characters"
     assert validate_password("password") == "Password too common"
-    assert validate_password("validpassword123") is None
+    assert validate_password("Str0ng!P@ssw0rd#42") is None
+    assert validate_password("MyS3cure#Key2024!Xy") is None
 
 def test_hash_and_verify_password():
     password = "testpassword123"
@@ -66,16 +68,16 @@ def test_credits_system():
     user_id = create_anonymous()
     allowed, remaining = check_and_consume_credits(user_id)
     assert allowed == True
-    assert remaining == 4  # Started with 5, consumed 1
+    assert remaining == 22  # Started with 23, consumed 1
 
 def test_change_password():
-    user_id = create_user(_unique_email("changepass"), "oldpassword123")
-    ok, msg = change_password(user_id, "oldpassword123", "newpassword123")
+    user_id = create_user(_unique_email("changepass"), "OldStr0ng!Pass#42Xy")
+    ok, msg = change_password(user_id, "OldStr0ng!Pass#42Xy", "N3w!Str0ng#99AbXy")
     assert ok == True
     
     # Verify new password works
     user = get_user(user_id)
-    assert verify_password("newpassword123", user["password_hash"]) == True
+    assert verify_password("N3w!Str0ng#99AbXy", user["password_hash"]) == True
 
 def test_delete_user():
     user_id = create_user(_unique_email("delete"), "password123")
@@ -92,22 +94,37 @@ def _unique_email(prefix: str) -> str:
 def test_create_user_duplicate_race_raises():
     """Second concurrent-style insert must raise ValueError (409 net)."""
     email = _unique_email("dup")
-    first = create_user(email, "validpassword123")
+    strong = "Str0ng!P@ssw0rd#42"
+    first = create_user(email, strong)
     assert first > 0
     with pytest.raises(ValueError, match="already registered"):
-        create_user(email, "validpassword123")
+        create_user(email, strong)
 
 def test_password_blocklist_parity():
     """Must stay byte-identical to frontend validation.ts messages."""
-    # NOTE: length is checked before the blocklist, so "letmein"
-    # (7 chars) reports the length error instead.
+    # length is checked first, but these 8-9 char commons pass length and hit blocklist
     for common in ["password", "PASSWORD", "Password", "12345678", "qwerty123", "QWERTY123"]:
         assert validate_password(common) == "Password too common"
+    # 12+ char commons must be flagged
+    assert validate_password("Password123456!") == "Password too common"
+    assert validate_password("Qwerty12345678!") == "Password too common"
+    assert validate_password("Welcome123!@#456") == "Password too common"
     assert validate_password("letmein") == "Password must be at least 8 characters"
     assert validate_password("1234567") == "Password must be at least 8 characters"
     assert validate_password("x" * 129) == "Password too long"
-    assert validate_password("exactly8") is None
-    assert validate_password("x" * 128) is None
+    # repeated chars
+    assert validate_password("aaaValid!1234Xy") == "Password must not contain 3 repeated characters"
+    # sequential
+    assert validate_password("Abcd1234!@#Xyz") == "Password too weak — avoid sequences like abcd or 1234"
+    # complexity: need 3 of 4
+    assert validate_password("lowercaseonly123") == "Password must include 3 of: uppercase, lowercase, number, symbol"
+    assert validate_password("ALLUPPERCASE123") == "Password must include 3 of: uppercase, lowercase, number, symbol"
+    # email local part
+    assert validate_password("johnDoe!1234567Xy", email="john@example.com") == "Password must not contain your email"
+    # valid 12+ with 3 cats, no seq/repeat, not common
+    assert validate_password("Str0ng!P@ssw0rd#42") is None
+    assert validate_password("MyS3cure#Key2024!Xy") is None
+    assert validate_password("x" * 128) == "Password must not contain 3 repeated characters"
 
 def test_email_length_bounds():
     ok_254 = "a" * 242 + "@example.com"  # exactly 254 chars

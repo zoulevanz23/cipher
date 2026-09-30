@@ -14,6 +14,20 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "quiet": False,
     "ignore": [],
     "ignore_until": {},
+    "policies": {
+        "health_min": None,
+        "max_critical": None,
+        "max_high": None,
+        "max_medium": None,
+        "max_low": None,
+        "license_denylist": [],
+        "license_allowlist": None,
+    },
+    "license_policy": {
+        "allowlist": [],
+        "denylist": ["GPL", "GPL-2.0", "GPL-3.0", "AGPL", "AGPL-3.0"],
+        "unknown": "allow",
+    },
 }
 
 PROJECT_FILES = [".vulncheckerrc", ".vulnchecker.json"]

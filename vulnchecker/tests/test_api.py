@@ -25,7 +25,7 @@ def test_health_check():
 def test_register():
     response = client.post("/api/auth/register", json={
         "email": _unique("test"),
-        "password": "testpassword123"
+        "password": "Str0ng!P@ssw0rd#42"
     })
     assert response.status_code == 200
     data = response.json()
@@ -37,13 +37,13 @@ def test_login():
     # First register
     client.post("/api/auth/register", json={
         "email": email,
-        "password": "testpassword123"
+        "password": "Str0ng!P@ssw0rd#42"
     })
     
     # Then login
     response = client.post("/api/auth/login", json={
         "email": email,
-        "password": "testpassword123"
+        "password": "Str0ng!P@ssw0rd#42"
     })
     assert response.status_code == 200
     data = response.json()
@@ -68,18 +68,18 @@ def test_duplicate_register():
     # Register once
     client.post("/api/auth/register", json={
         "email": email,
-        "password": "testpassword123"
+        "password": "Str0ng!P@ssw0rd#42"
     })
     
     # Try to register again
     response = client.post("/api/auth/register", json={
         "email": email,
-        "password": "testpassword123"
+        "password": "Str0ng!P@ssw0rd#42"
     })
     assert response.status_code == 409
 
 def _register_token(email: str) -> str:
-    r = client.post("/api/auth/register", json={"email": email, "password": "testpassword123"})
+    r = client.post("/api/auth/register", json={"email": email, "password": "Str0ng!P@ssw0rd#42"})
     assert r.status_code == 200
     return r.json()["token"]
 
@@ -127,7 +127,8 @@ def _mock_google(monkeypatch, claims):
 
 def test_google_auto_creates_account_on_first_signin(monkeypatch):
     email = _unique("guser")
-    _mock_google(monkeypatch, {"email": email, "email_verified": True, "sub": "sub-1"})
+    sub = f"sub-{uuid.uuid4().hex[:8]}"
+    _mock_google(monkeypatch, {"email": email, "email_verified": True, "sub": sub})
     first = client.post("/api/auth/google", json={"id_token": "fake-token"})
     assert first.status_code == 200
     d1 = first.json()
@@ -143,13 +144,13 @@ def test_google_auto_creates_account_on_first_signin(monkeypatch):
 
 def test_google_links_password_account(monkeypatch):
     email = _unique("glink")
-    client.post("/api/auth/register", json={"email": email, "password": "testpassword123"})
-    _mock_google(monkeypatch, {"email": email, "email_verified": True, "sub": "sub-2"})
+    client.post("/api/auth/register", json={"email": email, "password": "Str0ng!P@ssw0rd#42"})
+    _mock_google(monkeypatch, {"email": email, "email_verified": True, "sub": f"sub-{uuid.uuid4().hex[:8]}"})
     r = client.post("/api/auth/google", json={"id_token": "fake-token"})
     assert r.status_code == 200
     assert r.json()["is_new"] is False
     # Password login still works after linking.
-    login = client.post("/api/auth/login", json={"email": email, "password": "testpassword123"})
+    login = client.post("/api/auth/login", json={"email": email, "password": "Str0ng!P@ssw0rd#42"})
     assert login.status_code == 200
 
 def test_google_rejects_unverified_and_bad_tokens(monkeypatch):
