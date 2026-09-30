@@ -32,7 +32,6 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const [scanLog, setScanLog] = useState<string[]>([]);
-  void exportLoading;
 
   const go = (v: View) => setView(v);
   /* Footer anchor links work from any view: land first, then scroll. */
