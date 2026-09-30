@@ -6,9 +6,7 @@ interface HistoryEntry {
   results_json?: string;
 }
 
-interface Props {
-  history: HistoryEntry[];
-}
+interface Props { history: HistoryEntry[]; }
 
 interface VulnAge {
   id: string;
@@ -20,18 +18,12 @@ interface VulnAge {
   active: boolean;
 }
 
-const SEV_ORDER: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
-const SEV_COLORS: Record<string, string> = {
-  CRITICAL: "#ff4757", HIGH: "#ff6348", MEDIUM: "#ffa502", LOW: "#2ed573",
-};
+const SEV_ORDER: Record<string, number> = { CRITICAL:4, HIGH:3, MEDIUM:2, LOW:1 };
 
 export function VulnAging({ history }: Props) {
   const vulnAges = useMemo(() => {
-    const sorted = [...history].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+    const sorted = [...history].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const vulnMap = new Map<string, VulnAge>();
-
     sorted.forEach((entry, scanIdx) => {
       if (!entry.results_json) return;
       try {
@@ -45,36 +37,22 @@ export function VulnAging({ history }: Props) {
               existing.last_seen = scanIdx;
               existing.scan_count++;
             } else {
-              vulnMap.set(key, {
-                id: vuln.id,
-                severity: vuln.severity || "UNKNOWN",
-                package_name: pkgName,
-                first_seen: scanIdx,
-                last_seen: scanIdx,
-                scan_count: 1,
-                active: true,
-              });
+              vulnMap.set(key, { id: vuln.id, severity: vuln.severity || "UNKNOWN", package_name: pkgName, first_seen: scanIdx, last_seen: scanIdx, scan_count: 1, active: true });
             }
           }
         }
       } catch {}
     });
-
     const latestIdx = sorted.length - 1;
-    for (const v of vulnMap.values()) {
-      v.active = v.last_seen === latestIdx;
-    }
-
-    return Array.from(vulnMap.values()).sort(
-      (a, b) => SEV_ORDER[b.severity] - SEV_ORDER[a.severity] || a.first_seen - b.first_seen
-    );
+    for (const v of vulnMap.values()) v.active = v.last_seen === latestIdx;
+    return Array.from(vulnMap.values()).sort((a, b) => SEV_ORDER[b.severity] - SEV_ORDER[a.severity] || a.first_seen - b.first_seen);
   }, [history]);
 
   if (vulnAges.length === 0) {
     return (
-      <div className="bg-surface-2/50 border border-border rounded-xl p-5">
-        <h4 className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-4">Vulnerability Aging</h4>
-        <p className="text-xs text-gray-500 font-mono">No vulnerability data in history.</p>
+      <div style={{border:"1px solid var(--line)", borderRadius:"8px", padding:"16px", background:"var(--bg2)"}}>
+        <h4 style={{fontFamily:"var(--font-mono)", fontSize:"12px", color:"var(--ink)", fontWeight:600, marginBottom:"8px"}}>Vulnerability Aging</h4>
+        <p style={{fontFamily:"var(--font-mono)", fontSize:"12px", color:"var(--muted)"}}>No vulnerability data in history.</p>
       </div>
     );
   }
@@ -84,41 +62,29 @@ export function VulnAging({ history }: Props) {
   const scanCount = history.length;
 
   return (
-    <div className="bg-surface-2/50 border border-border rounded-xl p-5 flex flex-col">
-      <div className="flex items-center justify-between mb-3">
+    <div style={{border:"1px solid var(--line)", borderRadius:"8px", padding:"16px", background:"var(--bg2)"}}>
+      <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px", flexWrap:"wrap", gap:"8px"}}>
         <div>
-          <h4 className="text-xs font-mono text-gray-500 uppercase tracking-wider">Vulnerability Aging</h4>
-          <p className="text-[10px] text-gray-600 font-mono mt-0.5">Persistence across {scanCount} scan{scanCount !== 1 ? "s" : ""}</p>
+          <h4 style={{fontFamily:"var(--font-mono)", fontSize:"12px", color:"var(--ink)", fontWeight:600}}>Vulnerability Aging</h4>
+          <p style={{fontFamily:"var(--font-mono)", fontSize:"10px", color:"var(--muted)", marginTop:"2px"}}>Persistence across {scanCount} scan{scanCount !== 1 ? "s" : ""}</p>
         </div>
-        <div className="flex items-center gap-3 text-[10px] font-mono">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-critical" />
-            <span className="text-critical">{active.length} active</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-low" />
-            <span className="text-low">{fixed.length} fixed</span>
-          </span>
+        <div style={{display:"flex", alignItems:"center", gap:"12px", fontFamily:"var(--font-mono)", fontSize:"10px", color:"var(--muted)"}}>
+          <span style={{color:"var(--crit)"}}>{active.length} active</span>
+          <span style={{color:"var(--pass)"}}>{fixed.length} fixed</span>
         </div>
       </div>
-
-      <div className="flex-1 space-y-1.5 max-h-64 overflow-y-auto">
+      <div style={{display:"flex", flexDirection:"column", gap:"4px", maxHeight:"200px", overflowY:"auto"}}>
         {vulnAges.slice(0, 25).map((v) => {
           const pct = Math.round((v.scan_count / Math.max(scanCount, 1)) * 100);
-          const color = SEV_COLORS[v.severity] || "#9ca3af";
           return (
-            <div key={`${v.id}::${v.package_name}`} className="flex items-center gap-2 text-[10px] font-mono py-0.5">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${v.active ? "bg-critical" : "bg-low"}`} />
-              <span className="w-1.5 h-1.5 rounded-sm shrink-0" style={{ backgroundColor: color }} title={v.severity} />
-              <span className="text-gray-400 truncate min-w-0 flex-1">{v.package_name}</span>
-              <span className="text-gray-500 shrink-0">{v.id}</span>
-              <div className="w-12 bg-surface-2 rounded-full h-1.5 overflow-hidden shrink-0">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${pct}%`, backgroundColor: v.active ? "var(--color-critical)" : "var(--color-low)" }}
-                />
+            <div key={`${v.id}::${v.package_name}`} style={{display:"flex", alignItems:"center", gap:"6px", fontFamily:"var(--font-mono)", fontSize:"10px", padding:"3px 0"}}>
+              <span style={{width:"6px", height:"6px", borderRadius:"50%", background:v.active ? "var(--crit)" : "var(--pass)", flexShrink:0}} />
+              <span style={{color:"var(--muted)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:"1"}}>{v.package_name}</span>
+              <span style={{color:"var(--muted)", width:"40px", textAlign:"right"}}>{v.id}</span>
+              <div style={{width:"40px", height:"4px", background:"var(--bg)", borderRadius:"2px", overflow:"hidden", flexShrink:0}}>
+                <div style={{width:`${pct}%`, height:"100%", background:v.active ? "var(--crit)" : "var(--pass)", borderRadius:"2px"}} />
               </div>
-              <span className="text-gray-500 w-6 text-right shrink-0">{pct}%</span>
+              <span style={{color:"var(--muted)", width:"28px", textAlign:"right"}}>{pct}%</span>
             </div>
           );
         })}

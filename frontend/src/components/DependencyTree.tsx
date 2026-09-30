@@ -1,5 +1,3 @@
-
-
 interface Props {
   dependencies?: { name: string; version: string }[];
   packageName: string;
@@ -7,20 +5,17 @@ interface Props {
 
 export function DependencyTree({ dependencies, packageName }: Props) {
   if (!dependencies || dependencies.length === 0) return null;
-
   return (
-    <div className="mt-2 mb-2 ml-4 pl-3 border-l-2 border-gray-700/50">
-      <div className="flex items-center gap-1.5 text-xs font-mono text-gray-500 mb-1">
-        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
-        </svg>
+    <div style={{marginLeft:"16px", borderLeft:"1px solid var(--line)", paddingLeft:"12px", marginBottom:"8px", marginTop:"8px"}}>
+      <div style={{fontFamily:"var(--font-mono)", fontSize:"11px", color:"var(--muted)", marginBottom:"4px", display:"flex", alignItems:"center", gap:"4px"}}>
+        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="var(--muted)" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4"/></svg>
         <span>{packageName}</span>
       </div>
       {dependencies.map((dep) => (
-        <div key={dep.name} className="flex items-center gap-2 py-0.5 text-xs font-mono">
-          <span className="text-gray-600">└──</span>
-          <span className="text-gray-300">{dep.name}</span>
-          <span className="text-gray-600">@{dep.version}</span>
+        <div key={dep.name} style={{fontFamily:"var(--font-mono)", fontSize:"11px", color:"var(--muted)", padding:"2px 0", display:"flex", alignItems:"center", gap:"4px"}}>
+          <span style={{color:"var(--muted2)"}}>└──</span>
+          <span style={{color:"var(--ink)"}}>{dep.name}</span>
+          <span style={{color:"var(--muted2)"}}>@{dep.version}</span>
         </div>
       ))}
     </div>

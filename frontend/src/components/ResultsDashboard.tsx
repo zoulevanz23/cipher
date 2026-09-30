@@ -1,9 +1,21 @@
 import { useState } from "react";
 import type { ScanResult, Severity } from "../types";
-import { DependencyTree } from "./DependencyTree";
 
 const order: Record<string, number> = { CRITICAL:4, HIGH:3, MEDIUM:2, LOW:1, NONE:0, UNKNOWN:-1 };
-const swatch: Record<string,string> = { CRITICAL:"bg-[#C1273B]", HIGH:"bg-[#A85419]", MEDIUM:"bg-[#8A6A14]", LOW:"bg-[#2C6E52]" };
+
+function sevColor(sev: string): string {
+  if (sev === "CRITICAL") return "var(--crit)";
+  if (sev === "HIGH") return "var(--high)";
+  if (sev === "MEDIUM") return "var(--warn)";
+  return "var(--pass)";
+}
+
+function sevBorder(sev: string): string {
+  if (sev === "CRITICAL") return "rgba(255,92,92,.4)";
+  if (sev === "HIGH") return "rgba(255,138,92,.4)";
+  if (sev === "MEDIUM") return "rgba(245,196,83,.4)";
+  return "rgba(57,217,138,.4)";
+}
 
 export function ResultsDashboard({ results, onSelectResult }: { results: ScanResult[]; onSelectResult?: (r: ScanResult|null)=>void }) {
   const [filter, setFilter] = useState<Severity|"ALL">("ALL");
@@ -13,31 +25,30 @@ export function ResultsDashboard({ results, onSelectResult }: { results: ScanRes
   const vuln=results.filter(r=>r.vulnerable);
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-3 border-t border-[#12181F] pt-6 mb-3">
-        <h2 className="font-[Space_Grotesk] font-bold text-[18px]"><span className="font-mono text-xs text-[#8593A1] mr-2">SHEET —</span>{vuln.length?`${vuln.length} package${vuln.length>1?"s":""} with vulnerabilities`:"All packages safe — [OK]"}</h2>
-        <div className="flex items-center gap-2">
-          <select value={filter} onChange={e=>setFilter(e.target.value as any)} className="border border-[#12181F] bg-white px-2 py-1 text-xs font-mono">
+      <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px", marginBottom:"16px", flexWrap:"wrap"}}>
+        <h2 style={{fontFamily:"var(--font-sans)", fontSize:"18px", fontWeight:600, color:"var(--ink)"}}>
+          {vuln.length?`${vuln.length} package${vuln.length>1?"s":""} with vulnerabilities`:"All packages safe"}
+        </h2>
+        <div style={{display:"flex", alignItems:"center", gap:"8px"}}>
+          <select value={filter} onChange={e=>setFilter(e.target.value as any)} style={{fontFamily:"var(--font-mono)", fontSize:"13px", background:"var(--bg2)", color:"var(--ink)", border:"1px solid var(--line)", borderRadius:"4px", padding:"4px 8px"}}>
             <option value="ALL">All severities</option><option value="CRITICAL">Critical</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option>
           </select>
-          <button onClick={()=>setSortBy(sortBy==="severity"?"name":"severity")} className="border border-[#12181F] px-3 py-1 text-xs font-mono bg-[#EDF1F4]">Sort by {sortBy==="severity"?"name":"severity"}</button>
+          <button onClick={()=>setSortBy(sortBy==="severity"?"name":"severity")} className="btn btn-sm">Sort by {sortBy==="severity"?"name":"severity"}</button>
         </div>
       </div>
-      <div className="border border-[#12181F]">
-        <div className="hidden sm:flex text-[10px] font-mono tracking-[0.04em] text-[#8593A1] bg-[#E3E9ED] border-b border-[#12181F] px-3 py-2">
-          <span className="flex-1">PACKAGE</span><span className="w-20 text-center">SEVERITY</span><span className="w-24 text-right">VULNS</span>
-        </div>
+      <div style={{border:"1px solid var(--line)", borderRadius:"8px", overflow:"hidden"}}>
         {filtered.map((r,i)=>(
-          <button key={`${r.package.name}-${i}`} onClick={()=>onSelectResult?.(r)} className="w-full flex items-center gap-3 px-3 py-3 border-b last:border-b-0 border-[#B7C3CB] hover:bg-[#E3E9ED] text-left">
-            <span className={`w-2 h-2 shrink-0 ${swatch[r.max_severity]??"bg-[#B7C3CB]"}`}/>
-            <span className="flex-1 min-w-0 font-mono text-xs font-semibold truncate">{r.package.name}<span className="text-[#8593A1] font-normal ml-2">{r.package.version}</span></span>
-            <span className="hidden sm:inline-flex text-[10px] font-mono border border-[#B7C3CB] px-1.5 py-0.5">{r.package.ecosystem ?? ""}</span>
-            <span className={`text-[10px] font-mono font-bold px-2 py-1 border ${r.max_severity==="CRITICAL"?"border-[#C1273B] text-[#C1273B]": r.max_severity==="HIGH"?"border-[#A85419] text-[#A85419]": r.max_severity==="MEDIUM"?"border-[#8A6A14] text-[#8A6A14]":"border-[#2C6E52] text-[#2C6E52]"}`}>{r.max_severity}</span>
-            <span className="w-12 text-right text-xs font-mono">{r.vulnerabilities.length}</span>
+          <button key={`${r.package.name}-${i}`} onClick={()=>onSelectResult?.(r)} style={{width:"100%", display:"flex", alignItems:"center", gap:"12px", padding:"10px 12px", borderBottom:"1px solid var(--line)", background:"transparent", color:"var(--ink)", cursor:"pointer", textAlign:"left", transition:`background var(--dur-base) var(--ease)`}}
+            onMouseEnter={(e)=>{e.currentTarget.style.background="rgba(255,255,255,.02)"}} onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}>
+            <span style={{width:"8px", height:"8px", borderRadius:"50%", background:sevColor(r.max_severity), flexShrink:0}} />
+            <span style={{flex:"1", fontFamily:"var(--font-mono)", fontSize:"14px", fontWeight:500}}>{r.package.name}<span style={{color:"var(--muted)", fontWeight:400}}> {r.package.version}</span></span>
+            <span style={{fontFamily:"var(--font-mono)", fontSize:"12px", color:"var(--muted)"}}>{r.package.ecosystem ?? ""}</span>
+            <span style={{fontFamily:"var(--font-mono)", fontSize:"12px", fontWeight:600, color:sevColor(r.max_severity), border:`1px solid ${sevBorder(r.max_severity)}`, borderRadius:"4px", padding:"2px 6px", background:"transparent"}}>{r.max_severity}</span>
+            <span style={{fontFamily:"var(--font-mono)", fontSize:"13px", color:"var(--muted)", width:"40px", textAlign:"right"}}>{r.vulnerabilities.length}</span>
           </button>
         ))}
-        {filtered.length===0&&<div className="text-center py-10 text-xs font-mono text-[#8593A1]">No results match filter.</div>}
+        {filtered.length===0&&<div style={{textAlign:"center", padding:"32px", fontFamily:"var(--font-mono)", fontSize:"13px", color:"var(--muted)"}}>No results match filter.</div>}
       </div>
-      {filtered.length>0 && <div className="mt-4 space-y-0">{filtered.map(r=> <div key={r.package.name} className="hidden"><DependencyTree dependencies={r.package.dependencies} packageName={r.package.name} /></div>)}</div>}
     </div>
   );
 }

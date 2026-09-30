@@ -1,36 +1,39 @@
 import { useState } from "react";
 import type { ScanResult, Vulnerability, FixSuggestion } from "../types";
 
-const col: Record<string,string> = { CRITICAL:"#C1273B", HIGH:"#A85419", MEDIUM:"#8A6A14", LOW:"#2C6E52" };
+const col: Record<string,string> = { CRITICAL:"var(--crit)", HIGH:"var(--high)", MEDIUM:"var(--warn)", LOW:"var(--pass)" };
 
 export function VulnDetail({ result, onClose, fix }: { result: ScanResult; onClose:()=>void; fix?:FixSuggestion }) {
   return (
     <div className="fixed inset-0 z-[70]">
-      <div className="fixed inset-0 bg-[#12181F]/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl max-h-[85vh] overflow-y-auto bg-[#EDF1F4] border border-[#12181F] animate-slide-up">
-        <div className="sticky top-0 bg-[#E3E9ED] border-b border-[#12181F] flex items-start justify-between p-4">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl max-h-[85vh] overflow-y-auto bg-[var(--bg2)] border border-[var(--line)]">
+        <div className="sticky top-0 bg-[var(--bg2)] border-b border-[var(--line)] flex items-start justify-between p-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-[Space_Grotesk] font-bold text-[16px]">{result.package.name}</h3>
-              {result.package.ecosystem && <span className="text-[10px] font-mono border border-[#B7C3CB] px-1.5 py-0.5 bg-white">{result.package.ecosystem}</span>}
-              {result.package.license && result.package.license!=="Unknown" && <span className="text-[10px] font-mono border border-[#B7C3CB] px-1.5 py-0.5 bg-white">{result.package.license}</span>}
+              <h3 style={{fontFamily:"var(--font-sans)", fontSize:"16px", fontWeight:600, color:"var(--ink)"}}>{result.package.name}</h3>
+              {result.package.ecosystem && <span style={{fontFamily:"var(--font-mono)", fontSize:"10px", border:"1px solid var(--line)", padding:"2px 6px", color:"var(--muted)"}}>{result.package.ecosystem}</span>}
+              {result.package.license && result.package.license!=="Unknown" && <span style={{fontFamily:"var(--font-mono)", fontSize:"10px", border:"1px solid var(--line)", padding:"2px 6px", color:"var(--muted)"}}>{result.package.license}</span>}
             </div>
-            <p className="text-xs font-mono text-[#4C5A67] mt-1">{result.package.version}{result.health_score!==undefined && <span className="ml-3">health: <span style={{color: result.health_score>=80?"#2C6E52":result.health_score>=50?"#A85419":"#C1273B"}}>{result.health_score}/100</span></span>}</p>
+            <p style={{fontFamily:"var(--font-mono)", fontSize:"12px", color:"var(--muted)", marginTop:"4px"}}>{result.package.version}{result.health_score!==undefined && <span style={{marginLeft:"12px"}}>health: <span style={{color: result.health_score>=80?"var(--pass)":result.health_score>=50?"var(--high)":"var(--crit)"}}>{result.health_score}/100</span></span>}</p>
           </div>
-          <button onClick={onClose} className="w-7 h-7 border border-[#12181F] flex items-center justify-center hover:bg-[#12181F] hover:text-[#EDF1F4]">✕</button>
+          <button onClick={onClose} style={{width:"28px", height:"28px", border:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"center", background:"transparent", color:"var(--muted)", cursor:"pointer"}}>✕</button>
         </div>
-        <div className="p-4 space-y-4">
+        <div style={{padding:"16px", display:"flex", flexDirection:"column", gap:"16px"}}>
           {fix && (
-            <div className="border border-[#2C6E52] bg-[#2C6E52]/5 p-3">
-              <p className="text-[11px] font-mono font-bold text-[#2C6E52] flex items-center gap-1.5">Recommended Fix {fix.risk && <span className="ml-auto text-[10px] border border-[#B7C3CB] px-1.5 py-0.5 bg-white">{fix.risk_label||fix.risk}</span>}</p>
-              <div className="flex items-center gap-2 mt-2 font-mono text-xs">
-                <span className="line-through text-[#C1273B]">{fix.current_version}</span> → <span className="font-bold text-[#2C6E52]">{fix.recommended_version}</span>
+            <div style={{border:"1px solid var(--pass)", background:"rgba(57,217,138,.05)", padding:"12px", borderRadius:"6px"}}>
+              <p style={{fontFamily:"var(--font-mono)", fontSize:"11px", fontWeight:600, color:"var(--pass)"}}>Recommended Fix {fix.risk && <span style={{marginLeft:"8px", border:"1px solid var(--line)", padding:"1px 6px", color:"var(--muted)", fontSize:"10px"}}>{fix.risk_label||fix.risk}</span>}</p>
+              <div style={{fontFamily:"var(--font-mono)", fontSize:"12px", marginTop:"8px", display:"flex", alignItems:"center", gap:"8px"}}>
+                <span style={{textDecoration:"line-through", color:"var(--crit)"}}>{fix.current_version}</span> → <span style={{fontWeight:600, color:"var(--pass)"}}>{fix.recommended_version}</span>
               </div>
-              <code className="block mt-2 bg-white border border-[#B7C3CB] px-2 py-1 text-xs font-mono">npm install {result.package.name}@{fix.recommended_version}</code>
+              <code style={{display:"block", marginTop:"8px", background:"var(--bg)", border:"1px solid var(--line)", padding:"6px 8px", fontSize:"12px", fontFamily:"var(--font-mono)", borderRadius:"4px"}}>npm install {result.package.name}@{fix.recommended_version}</code>
             </div>
           )}
           {result.vulnerabilities.length===0 ? (
-            <div className="py-10 text-center border border-[#2C6E52] bg-[#2C6E52]/5"><p className="font-bold text-[#2C6E52]">No known vulnerabilities</p><p className="text-xs font-mono text-[#4C5A67] mt-1">This package version appears safe.</p></div>
+            <div style={{padding:"24px", textAlign:"center", border:"1px solid var(--pass)", background:"rgba(57,217,138,.05)", borderRadius:"6px"}}>
+              <p style={{fontWeight:600, color:"var(--pass)", fontFamily:"var(--font-mono)", fontSize:"13px"}}>No known vulnerabilities</p>
+              <p style={{fontFamily:"var(--font-mono)", fontSize:"12px", color:"var(--muted)", marginTop:"4px"}}>This package version appears safe.</p>
+            </div>
           ) : result.vulnerabilities.map(v=><VulnCard key={v.id} vuln={v} />)}
         </div>
       </div>
@@ -41,24 +44,24 @@ export function VulnDetail({ result, onClose, fix }: { result: ScanResult; onClo
 function VulnCard({ vuln }: { vuln: Vulnerability }) {
   const [open,setOpen]=useState(false);
   return (
-    <div className="border border-[#12181F] bg-white">
-      <button onClick={()=>setOpen(!open)} className="w-full flex items-start justify-between gap-3 p-3 text-left">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 border text-white" style={{background: col[vuln.severity]??"#8593A1", borderColor: col[vuln.severity]??"#8593A1"}}>{vuln.severity}</span>
-            <span className="text-[10px] font-mono border border-[#B7C3CB] px-1 py-0.5 bg-[#E3E9ED]">{(vuln.source||"osv").toUpperCase()}</span>
-            <span className="font-mono text-xs font-semibold">{vuln.id}</span>
-            {vuln.cvss_score!=null && <span className="text-[10px] font-mono border border-[#B7C3CB] px-1 py-0.5 bg-white">CVSS {vuln.cvss_score.toFixed(1)}</span>}
+    <div style={{border:"1px solid var(--line)", background:"var(--bg)"}}>
+      <button onClick={()=>setOpen(!open)} style={{width:"100%", display:"flex", alignItems:"start", justifyContent:"space-between", gap:"12px", padding:"12px", textAlign:"left", background:"transparent", color:"var(--ink)", cursor:"pointer", border:"none"}}>
+        <div style={{minWidth:"0", flex:"1"}}>
+          <div style={{display:"flex", alignItems:"center", gap:"6px", flexWrap:"wrap"}}>
+            <span style={{fontFamily:"var(--font-mono)", fontSize:"10px", fontWeight:600, padding:"2px 6px", background:col[vuln.severity]??`var(--muted)`, color:"#fff", borderRadius:"3px"}}>{vuln.severity}</span>
+            <span style={{fontFamily:"var(--font-mono)", fontSize:"10px", border:"1px solid var(--line)", padding:"2px 6px", color:"var(--muted)"}}>{(vuln.source||"osv").toUpperCase()}</span>
+            <span style={{fontFamily:"var(--font-mono)", fontSize:"12px", fontWeight:500}}>{vuln.id}</span>
+            {vuln.cvss_score!=null && <span style={{fontFamily:"var(--font-mono)", fontSize:"10px", border:"1px solid var(--line)", padding:"2px 6px", color:"var(--muted)"}}>CVSS {vuln.cvss_score.toFixed(1)}</span>}
           </div>
-          <p className="text-xs text-[#12181F] mt-2 leading-relaxed">{vuln.summary}</p>
+          <p style={{fontFamily:"var(--font-sans)", fontSize:"13px", color:"var(--muted)", marginTop:"8px", lineHeight:1.5}}>{vuln.summary}</p>
         </div>
-        <span className="text-[#8593A1] text-xs">{open?"−":"+"}</span>
+        <span style={{fontFamily:"var(--font-mono)", fontSize:"12px", color:"var(--muted)"}}>{open?"−":"+"}</span>
       </button>
       {open && (
-        <div className="border-t border-[#B7C3CB] px-3 py-3 space-y-2 bg-[#E3E9ED]">
-          {vuln.aliases.length>0 && <div className="flex flex-wrap gap-1">{vuln.aliases.map(a=><span key={a} className="text-[10px] font-mono border border-[#B7C3CB] bg-white px-1.5 py-0.5">{a}</span>)}</div>}
-          <p className="text-xs leading-relaxed text-[#12181F]">{vuln.summary}</p>
-          {vuln.references.length>0 && <div className="space-y-1">{vuln.references.slice(0,3).map((r,i)=><a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="block text-xs font-mono text-[#1C4FB8] underline truncate">{r.url}</a>)}</div>}
+        <div style={{borderTop:"1px solid var(--line)", padding:"12px", display:"flex", flexDirection:"column", gap:"8px", background:"var(--bg)"}}>
+          {vuln.aliases.length>0 && <div style={{display:"flex", flexWrap:"wrap", gap:"4px"}}>{vuln.aliases.map(a=><span key={a} style={{fontFamily:"var(--font-mono)", fontSize:"10px", border:"1px solid var(--line)", background:"var(--bg2)", padding:"2px 6px", color:"var(--muted)"}}>{a}</span>)}</div>}
+          <p style={{fontFamily:"var(--font-sans)", fontSize:"13px", color:"var(--muted)", lineHeight:1.5}}>{vuln.summary}</p>
+          {vuln.references.length>0 && <div style={{display:"flex", flexDirection:"column", gap:"4px"}}>{vuln.references.slice(0,3).map((r,i)=><a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{fontFamily:"var(--font-mono)", fontSize:"12px", color:"var(--muted)", textDecoration:"underline"}}>{r.url}</a>)}</div>}
         </div>
       )}
     </div>

@@ -14,7 +14,7 @@ export function Navbar({ onAbout, onHistory, onNews, onFeatures, onHome, onScann
         </nav>
         <div className="nav-right">
           {auth && !auth.isAnonymous && <span className="credits">∞ unlimited</span>}
-          {auth && auth.isAnonymous && <span className="credits">{auth.credits}/5 scans</span>}
+          {auth && auth.isAnonymous && <span className="credits">{auth.credits}/23 scans</span>}
           {onResults && <button onClick={onResults} className="btn btn-sm" style={activeView === "results" ? {background:"var(--line)", color:"var(--ink)"} : undefined}>Results</button>}
           <button onClick={onProfile} className="btn btn-sm">Account</button>
           {/* No account yet (anonymous) → offer Sign in, never Sign out.

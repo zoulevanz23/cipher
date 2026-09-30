@@ -21,12 +21,12 @@ export function ScanningRadar() {
       const cx = 40, cy = 40, maxR = 32;
 
       const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-      bg.addColorStop(0, "rgba(0, 255, 65, 0.06)");
-      bg.addColorStop(1, "rgba(0, 255, 65, 0)");
+      bg.addColorStop(0, "rgba(57,217,138,0.06)");
+      bg.addColorStop(1, "rgba(57,217,138,0)");
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, 80, 80);
 
-      ctx.strokeStyle = "rgba(0, 255, 65, 0.08)";
+      ctx.strokeStyle = "rgba(57,217,138,0.08)";
       ctx.lineWidth = 0.5;
       for (let i = 1; i <= 3; i++) {
         ctx.beginPath();
@@ -44,7 +44,7 @@ export function ScanningRadar() {
 
       ctx.beginPath();
       ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(180, 255, 180, ${alpha * 0.12})`;
+      ctx.strokeStyle = `rgba(57,217,138,${alpha * 0.12})`;
       ctx.lineWidth = 5;
       ctx.stroke();
 

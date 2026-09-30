@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, authGoogle, authLogin, authRegister } from "../api/client";
-import { normalizeEmail, validateConfirm, validateEmail, validatePassword } from "../api/validation";
+import { normalizeEmail, validateConfirm, validateEmail, validatePassword, passwordScore } from "../api/validation";
 import { toast } from "./Toast";
 
 interface Props { onClose: () => void; onAuth: () => void; initialTab?: "login" | "register"; }
@@ -114,8 +114,14 @@ export function AuthModal({ onClose, onAuth, initialTab = "register" }: Props) {
     const errs: typeof fieldErr = {};
     const emailErr = validateEmail(email);
     if (emailErr) errs.email = emailErr;
-    const pwErr = validatePassword(password);
-    if (pwErr) errs.password = pwErr;
+    if (tab === "register") {
+      const pwErr = validatePassword(password, email);
+      if (pwErr) errs.password = pwErr;
+    } else {
+      // login: don't enforce complexity, just length to avoid leaking
+      if (password.length < 8) errs.password = "Password must be at least 8 characters";
+      else if (password.length > 128) errs.password = "Password too long";
+    }
     if (tab === "register") {
       const cErr = validateConfirm(password, confirm);
       if (cErr) errs.confirm = cErr;
@@ -171,6 +177,20 @@ export function AuthModal({ onClose, onAuth, initialTab = "register" }: Props) {
               </button>
             </div>
             {fieldErr.password && <div style={errStyle}>{fieldErr.password}</div>}
+            {tab === "register" && password.length > 0 && (
+              <div style={{ marginTop: "8px", marginBottom: "4px" }}>
+                <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
+                  {[0,1,2,3].map(i => (
+                    <div key={i} style={{ flex: 1, height: "4px", borderRadius: "2px", background: i < passwordScore(password) ? (passwordScore(password) <= 1 ? "var(--crit)" : passwordScore(password) === 2 ? "var(--warn)" : "var(--pass)") : "var(--line)" }} />
+                  ))}
+                </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted)", display: "grid", gap: "2px" }}>
+                  <span style={{ color: password.length >= 8 ? "var(--pass)" : "var(--muted2)" }}>{password.length >= 8 ? "✓" : "○"} 8+ characters</span>
+                  <span style={{ color: (()=>{let c=0; if(/[A-Z]/.test(password))c++; if(/[a-z]/.test(password))c++; if(/[0-9]/.test(password))c++; if(/[^A-Za-z0-9]/.test(password))c++; return c>=3?"var(--pass)":"var(--muted2)"})() }}>{(() => { let c=0; if(/[A-Z]/.test(password))c++; if(/[a-z]/.test(password))c++; if(/[0-9]/.test(password))c++; if(/[^A-Za-z0-9]/.test(password))c++; return c>=3?"✓":"○"; })()} 3 of: upper, lower, number, symbol</span>
+                  <span style={{ color: !/(.)\1\1/.test(password) && !/(?:abcd|1234|qwerty)/i.test(password) ? "var(--pass)" : "var(--muted2)" }}>{!/(.)\1\1/.test(password) && !/(?:abcd|1234|qwerty)/i.test(password) ? "✓" : "○"} No sequences or repeats</span>
+                </div>
+              </div>
+            )}
           </div>
           {tab === "register" && (
             <div className="field">
@@ -209,7 +229,7 @@ export function AuthModal({ onClose, onAuth, initialTab = "register" }: Props) {
           </>
         )}
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--muted2)", textAlign: "center", marginTop: "12px" }}>
-          or <a href="#" onClick={(ev) => { ev.preventDefault(); onClose(); toast("Continuing anonymously — 5 scans/day"); }} style={{ color: "var(--muted)", textDecoration: "underline" }}>continue anonymously</a>
+          or <a href="#" onClick={(ev) => { ev.preventDefault(); onClose(); toast("Continuing anonymously — 23 scans/day"); }} style={{ color: "var(--muted)", textDecoration: "underline" }}>continue anonymously</a>
         </p>
       </div>
     </div>

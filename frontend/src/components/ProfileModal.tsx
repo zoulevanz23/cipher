@@ -104,7 +104,7 @@ export function ProfileModal({ email, onClose, onDeleted }: Props) {
               <div>Scans performed: <span style={{ color: "var(--ink)" }}>{account.stats.scan_count}</span></div>
               <div>Vulnerabilities found: <span style={{ color: account.stats.total_vulnerabilities > 0 ? "var(--crit)" : "var(--pass)" }}>{account.stats.total_vulnerabilities}</span></div>
               {account.is_anonymous ? (
-                <div>Credits: <span style={{ color: "var(--ink)" }}>{account.credits.credits}/5</span><span style={{ color: "var(--muted2)" }}> · resets in {account.credits.reset_in_hours}h</span></div>
+                <div>Credits: <span style={{ color: "var(--ink)" }}>{account.credits.credits}/23</span><span style={{ color: "var(--muted2)" }}> · resets in {account.credits.reset_in_hours}h</span></div>
               ) : (
                 <div>Scans: <span style={{ color: "var(--ink)" }}>∞ unlimited</span></div>
               )}

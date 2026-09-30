@@ -1,24 +1,29 @@
 import type { ScanResponse } from "../types";
 
-export function StatsCards({ summary }: StatsCardsProps) {
+export function StatsCards({ summary }: { summary: ScanResponse["summary"] }) {
   const breakdown = summary.severity_breakdown;
+  const stats = [
+    { num: summary.total_packages, label: "packages scanned", color: "var(--ink)" },
+    { num: summary.vulnerable_packages, label: "vulnerable packages", color: summary.vulnerable_packages>0 ? "var(--crit)" : "var(--pass)" },
+    { num: summary.total_vulnerabilities, label: "total vulnerabilities", color: summary.total_vulnerabilities>0 ? "var(--crit)" : "var(--pass)" },
+    { num: breakdown.critical + breakdown.high, label: "critical + high", color: breakdown.critical > 0 || breakdown.high > 0 ? "var(--crit)" : "var(--pass)" },
+  ];
   return (
-    <div className="border border-[#12181F]">
-      <div className="grid grid-cols-2 sm:grid-cols-4">
-        <div className="px-4 py-4 border-r border-[#B7C3CB] border-b sm:border-b-0"><div className="font-[Space_Grotesk] font-bold text-[26px] leading-none">{summary.total_packages}</div><div className="text-[10.5px] font-mono text-[#8593A1] mt-1">packages scanned</div></div>
-        <div className="px-4 py-4 border-r-0 sm:border-r border-[#B7C3CB] border-b sm:border-b-0"><div className={`font-[Space_Grotesk] font-bold text-[26px] leading-none ${summary.vulnerable_packages>0?"text-[#C1273B]":""}`}>{summary.vulnerable_packages}</div><div className="text-[10.5px] font-mono text-[#8593A1] mt-1">vulnerable packages</div></div>
-        <div className="px-4 py-4 border-r border-[#B7C3CB]"><div className={`font-[Space_Grotesk] font-bold text-[26px] leading-none ${summary.total_vulnerabilities>0?"text-[#C1273B]":""}`}>{summary.total_vulnerabilities}</div><div className="text-[10.5px] font-mono text-[#8593A1] mt-1">total vulnerabilities</div></div>
-        <div className="px-4 py-4 bg-[#E3E9ED]">
-          <div className="text-[10px] font-mono tracking-[0.04em] text-[#8593A1] font-semibold mb-2">SEVERITY BREAKDOWN</div>
-          <div className="space-y-1 text-xs font-mono">
-            <div className="flex justify-between"><span><span className="inline-block w-2 h-2 bg-[#C1273B] mr-2"/>Critical</span><span className="font-bold">{breakdown.critical}</span></div>
-            <div className="flex justify-between"><span><span className="inline-block w-2 h-2 bg-[#A85419] mr-2"/>High</span><span className="font-bold">{breakdown.high}</span></div>
-            <div className="flex justify-between"><span><span className="inline-block w-2 h-2 bg-[#8A6A14] mr-2"/>Medium</span><span className="font-bold">{breakdown.medium}</span></div>
-            <div className="flex justify-between"><span><span className="inline-block w-2 h-2 bg-[#2C6E52] mr-2"/>Low</span><span className="font-bold">{breakdown.low}</span></div>
+    <div>
+      <div style={{display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"1px", background:"var(--line)"}}>
+        {stats.map((s) => (
+          <div key={s.label} style={{background:"var(--bg2)", padding:"16px"}}>
+            <div style={{fontFamily:"var(--font-mono)", fontSize:"28px", fontWeight:700, color:s.color}}>{s.num}</div>
+            <div style={{fontFamily:"var(--font-sans)", fontSize:"12px", color:"var(--muted)", marginTop:"4px"}}>{s.label}</div>
           </div>
-        </div>
+        ))}
+      </div>
+      <div style={{borderTop:"1px solid var(--line)", marginTop:"1px", paddingTop:"12px", display:"flex", gap:"16px", fontFamily:"var(--font-mono)", fontSize:"11px", color:"var(--muted)"}}>
+        <span><span style={{color:"var(--crit)"}}>●</span> Critical {breakdown.critical}</span>
+        <span><span style={{color:"var(--high)"}}>●</span> High {breakdown.high}</span>
+        <span><span style={{color:"var(--warn)"}}>●</span> Medium {breakdown.medium}</span>
+        <span><span style={{color:"var(--pass)"}}>●</span> Low {breakdown.low}</span>
       </div>
     </div>
   );
 }
-interface StatsCardsProps { summary: ScanResponse["summary"]; }

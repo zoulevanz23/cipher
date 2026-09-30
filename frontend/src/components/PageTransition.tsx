@@ -1,15 +1,3 @@
-import { useEffect, useState } from "react";
-
 export function PageTransition({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  return (
-    <div className={`transition-opacity duration-300 ${mounted ? "opacity-100" : "opacity-0"}`}>
-      {children}
-    </div>
-  );
+  return <div style={{opacity:1, transition:"opacity var(--dur-base) var(--ease)"}}>{children}</div>;
 }
