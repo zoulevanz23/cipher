@@ -24,7 +24,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("landing");
-  const [exportLoading, setExportLoading] = useState(false);
   const [selectedResult, setSelectedResult] = useState<ScanResult | null>(null);
   const [auth, setAuth] = useState<{ email: string; isAnonymous: boolean; credits: number } | null>(null);
   const [showAuth, setShowAuth] = useState(false);
@@ -88,8 +87,8 @@ export default function App() {
     saveScan(scanResult.results, scanResult.summary, scanResult.fixes).catch(() => {});
   }, [scanResult]);
   const handleExport = async (fmt: string) => {
-    if (!scanResult) return; setExportLoading(true);
-    try { await fetchExport(scanResult.results, scanResult.summary, fmt); } catch (e) { console.error("Export failed:", e); } finally { setExportLoading(false); }
+    if (!scanResult) return;
+    try { await fetchExport(scanResult.results, scanResult.summary, fmt); } catch (e) { console.error("Export failed:", e); }
   };
   /* Reopen a saved scan from the caller's own history into the results view. */
   const handleLoadHistory = async (id: number) => {
